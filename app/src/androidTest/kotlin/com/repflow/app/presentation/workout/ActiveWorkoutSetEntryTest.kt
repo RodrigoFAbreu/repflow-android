@@ -52,7 +52,8 @@ import java.time.Instant
  *
  * `timed-set-clock` CP3 uses the same harness for a running clock across the Board
  * and a switch of exercise, and for `Start` ending a rest: it can hold a rest, and it
- * counts `onSkipRestTimer`, which ends the rest as the real use case does.
+ * counts `onClockStarted`, which ends the rest as the real ViewModel does.
+ * `ClockStartEndsRestRouteTest` runs that through the real ViewModel.
  */
 @RunWith(AndroidJUnit4::class)
 class ActiveWorkoutSetEntryTest {
@@ -66,7 +67,7 @@ class ActiveWorkoutSetEntryTest {
     private var heldOnSaved: (() -> Unit)? = null
     private var restTimer by mutableStateOf<RestTimerUi?>(null)
     private var sessionId by mutableStateOf("session-1")
-    private var skipCalls = 0
+    private var clockStarts = 0
 
     private val lastTime = LastPerformance(load = 80.0, reps = 8, durationSeconds = null, date = Instant.parse("2026-05-05T08:00:00Z"))
     private val lastTimeSeed = SetEntrySeed(load = BigDecimal("80"), reps = BigDecimal("8"))
@@ -170,15 +171,16 @@ class ActiveWorkoutSetEntryTest {
                 onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                 onAddRestTime = {},
                 onRemoveRestTime = {},
-                onSkipRestTimer = {
-                    skipCalls++
-                    restTimer = null
-                },
+                onSkipRestTimer = {},
                 onCompleteWorkout = {},
                 onLeaveWorkout = {},
                 onAbandonWorkout = {},
                 onRetry = {},
                 onErrorShown = {},
+                onClockStarted = {
+                    clockStarts++
+                    restTimer = null
+                },
             )
         }
     }
@@ -537,7 +539,7 @@ class ActiveWorkoutSetEntryTest {
         composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertIsDisplayed()
 
         tap(R.string.workout_focus_clock_start)
-        composeRule.runOnIdle { assertEquals(1, skipCalls) }
+        composeRule.runOnIdle { assertEquals(1, clockStarts) }
         composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertDoesNotExist()
         composeRule.waitForClockReadout(atLeastSeconds = 1)
 
@@ -545,28 +547,30 @@ class ActiveWorkoutSetEntryTest {
         composeRule.runOnIdle { restTimer = runningRest() }
         tap(R.string.workout_focus_clock_stop)
         composeRule.runOnIdle {
-            assertEquals(1, skipCalls)
+            assertEquals(1, clockStarts)
             assertTrue("Stop must not log a set", recordedLoads.isEmpty())
         }
         composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertIsDisplayed()
 
         tap(R.string.workout_focus_clock_start_again)
-        composeRule.runOnIdle { assertEquals(2, skipCalls) }
+        composeRule.runOnIdle { assertEquals(2, clockStarts) }
         composeRule.onNodeWithText(text(R.string.workout_rest_resting)).assertDoesNotExist()
     }
 
-    /** CP3's test 3: a skip with no rest would still write the session. */
+    /** With no rest on the screen one can still be on its way, from a `Log set` still saving, so the ViewModel decides, not this screen. */
     @Test
-    fun startAndStartAgainWithNoRestRunningEndNothing() {
+    fun startAndStartAgainReportTheClockStartingEvenWithNoRestOnTheScreen() {
         start(timedExercise())
 
         tap(R.string.workout_focus_clock_start)
+        composeRule.runOnIdle { assertEquals(1, clockStarts) }
         composeRule.waitForClockReadout(atLeastSeconds = 1)
         tap(R.string.workout_focus_clock_stop)
+        composeRule.runOnIdle { assertEquals(1, clockStarts) }
         tap(R.string.workout_focus_clock_start_again)
 
         composeRule.onNodeWithText(text(R.string.workout_focus_clock_stop)).performScrollTo().assertIsDisplayed()
-        composeRule.runOnIdle { assertEquals(0, skipCalls) }
+        composeRule.runOnIdle { assertEquals(2, clockStarts) }
     }
 
     /** A case the boards don't draw: the rest is over and the next set has started, so `Rest done` goes too. */
@@ -578,7 +582,7 @@ class ActiveWorkoutSetEntryTest {
 
         tap(R.string.workout_focus_clock_start)
 
-        composeRule.runOnIdle { assertEquals(1, skipCalls) }
+        composeRule.runOnIdle { assertEquals(1, clockStarts) }
         composeRule.onNodeWithText(text(R.string.workout_rest_done)).assertDoesNotExist()
     }
 

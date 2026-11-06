@@ -151,6 +151,7 @@ internal fun ActiveWorkoutRoute(
         keepScreenAwake = settings?.keepScreenAwake == true,
         confirmBeforeFinishing = settings?.confirmBeforeFinishing,
         focusEntries = focusEntries,
+        onClockStarted = viewModel::onClockStarted,
     )
 }
 

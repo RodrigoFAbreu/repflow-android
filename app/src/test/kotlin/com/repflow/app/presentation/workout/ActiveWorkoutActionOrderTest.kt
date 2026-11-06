@@ -297,6 +297,146 @@ class ActiveWorkoutActionOrderTest {
             }
         }
 
+    /** Review I1: the screen can't see this rest coming, so it's the queue that has to end it. */
+    @Test
+    fun `a clock started while a set is saving ends the rest that save starts`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                var saves = 0
+                val hold = holdWrites()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, onSaved = { saves++ })
+                viewModel.onClockStarted()
+                advanceUntilIdle()
+                hold.complete(Unit)
+                advanceUntilIdle()
+
+                val session = stored(sessionId)
+                assertNull(session.restTimer)
+                assertEquals(
+                    listOf(8),
+                    session.exercises
+                        .single()
+                        .sets
+                        .map { it.reps },
+                )
+                assertEquals(1, saves)
+                assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    /** The rest goes in behind the state's back, and nothing runs until `advanceUntilIdle`, so the state hasn't seen it at the tap. */
+    @Test
+    fun `a clock started before a stored rest reaches the screen ends that rest`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                advanceUntilIdle()
+
+                requireSuccess(StartRestTimer(workoutRepository, clock)(sessionId, REST_SECONDS))
+                assertNull((viewModel.uiState.value.content as ActiveWorkoutContent.Active).restTimer)
+                viewModel.onClockStarted()
+                advanceUntilIdle()
+
+                assertNull(stored(sessionId).restTimer)
+                assertNull((viewModel.uiState.value.content as ActiveWorkoutContent.Active).restTimer)
+                assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a clock started with no rest anywhere writes nothing`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                advanceUntilIdle()
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+
+                viewModel.onClockStarted()
+                advanceUntilIdle()
+
+                assertEquals(
+                    "A write would have used this failure up",
+                    WorkoutPersistenceError.Unavailable,
+                    workoutRepository.nextUpdateFailure,
+                )
+                assertNull(viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    /**
+     * Ending the earlier rest succeeds right behind the failed save. Had that cleared the
+     * message, the person, already counting a new hold, would never hear the set wasn't saved.
+     */
+    @Test
+    fun `a clock started behind a failed save leaves its message up and still ends the rest`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                val withExercise = startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                requireSuccess(StartRestTimer(workoutRepository, clock)(sessionId, REST_SECONDS))
+                advanceUntilIdle()
+                val hold = holdWrites()
+
+                viewModel.onRecordSet(withExercise.id, 60.0, 8)
+                advanceUntilIdle()
+                workoutRepository.holdWrites = null
+                viewModel.onClockStarted()
+                advanceUntilIdle()
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+                hold.complete(Unit)
+                advanceUntilIdle()
+
+                val session = stored(sessionId)
+                assertNull(session.restTimer)
+                assertEquals(
+                    emptyList<Int?>(),
+                    session.exercises
+                        .single()
+                        .sets
+                        .map { it.reps },
+                )
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    /** The plan's rule: a failed skip shows the one message, and the rest keeps running. */
+    @Test
+    fun `a clock started when the rest cannot be ended reports it and the rest stays`() =
+        runTest {
+            seedExercise()
+            Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+            viewModel.uiState.test {
+                startWorkoutWithTheExercise()
+                val sessionId = requireNotNull(workoutRepository.findActiveSession()).id
+                requireSuccess(StartRestTimer(workoutRepository, clock)(sessionId, REST_SECONDS))
+                advanceUntilIdle()
+                workoutRepository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+
+                viewModel.onClockStarted()
+                advanceUntilIdle()
+
+                assertEquals(now.plusSeconds(REST_SECONDS.toLong()), stored(sessionId).restTimer?.endAt)
+                assertEquals(ActiveWorkoutErrorReason.PERSISTENCE_UNAVAILABLE, viewModel.uiState.value.errorMessage)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
     private fun holdWrites(): CompletableDeferred<Unit> = CompletableDeferred<Unit>().also { workoutRepository.holdWrites = it }
 
     private suspend fun stored(id: WorkoutSessionId): WorkoutSession = requireNotNull(workoutRepository.findById(id))
@@ -340,4 +480,8 @@ class ActiveWorkoutActionOrderTest {
             is DomainResult.Success -> result.value
             is DomainResult.Failure -> throw AssertionError("Expected success but was failure: ${result.error}")
         }
+
+    private companion object {
+        const val REST_SECONDS = 90
+    }
 }

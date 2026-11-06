@@ -180,7 +180,9 @@ timestamp.
 
 A timed set's `Start` and `Start again` end a running rest, or a `Rest done`
 still showing: the next set has begun, so the strip goes and its alert is
-cancelled. `Stop` never starts a rest; the next one starts after `Log set`.
+cancelled. That includes the rest of a `Log set` still saving, which hasn't
+reached the screen yet. `Stop` never starts a rest; the next one starts after
+`Log set`.
 
 ## Interrupted workout
 

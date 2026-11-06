@@ -108,10 +108,10 @@ import com.repflow.app.presentation.progression.reasonAfterDash
  * carries across a switch between them; each mode draws the host on its scroll
  * area's bottom edge, which keeps it clear of the rest strip and `Log set`.
  *
- * **A timed set's `Start` ends a rest** (`20r`): the next set has begun. It goes
- * through [onSkipRestTimer], only when a rest is there to end, because a skip with
- * none would still write the session. `Stop` never starts or ends one, and the next
- * rest starts after `Log set`.
+ * **A timed set's `Start` ends a rest** (`20r`): the next set has begun. [onClockStarted]
+ * goes on every `Start`, whatever this screen shows, because a `Log set` still saving, or
+ * just saved, has started a rest that hasn't reached this screen. What it ends is decided
+ * in action order. `Stop` never starts or ends one, and the next rest starts after `Log set`.
  *
  * [focusEntries] holds each exercise's unlogged entry. The route is given one that
  * outlives this destination; the default, for a screen shown alone, lives with it.
@@ -144,6 +144,7 @@ internal fun ActiveWorkoutScreen(
     keepScreenAwake: Boolean = false,
     confirmBeforeFinishing: Boolean? = true,
     focusEntries: FocusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() },
+    onClockStarted: () -> Unit = {},
 ) {
     LaunchedEffect(finish) {
         if (finish is WorkoutFinishState.Finished) onWorkoutFinished(finish.sessionId)
@@ -196,7 +197,7 @@ internal fun ActiveWorkoutScreen(
                     confirmBeforeFinishing = confirmBeforeFinishing,
                     snackbarHostState = snackbarHostState,
                     focusEntries = focusEntries,
-                    onClockStarted = { if (content.restTimer != null) onSkipRestTimer() },
+                    onClockStarted = onClockStarted,
                 )
             }
 

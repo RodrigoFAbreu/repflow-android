@@ -397,6 +397,26 @@ class ActiveWorkoutViewModel
             launchAction { skipRestTimer(sessionId) }
         }
 
+        /**
+         * A set clock's `Start`: the next set has begun, so the rest is over. The rest it
+         * ends is whichever the session holds when this action's turn comes, not what the
+         * screen showed at the tap, because a `Log set` still saving, or just saved, has
+         * started one the screen can't have shown yet.
+         *
+         * Ending a rest isn't a retry of anything, so unlike [launchAction] a success
+         * leaves an earlier failure's message up: a `Log set` that failed just ahead of
+         * this still has to say so.
+         */
+        fun onClockStarted() {
+            val sessionId = activeSessionId() ?: return
+            viewModelScope.launch {
+                actionLock.withLock {
+                    val result = guardedRead { skipRestTimer(sessionId) }
+                    if (result is DomainResult.Failure) error.update { result.error.toReason() }
+                }
+            }
+        }
+
         fun onUndoLastSet(exerciseId: WorkoutExerciseId) {
             val sessionId = activeSessionId() ?: return
             launchAction { undoLastWorkoutSet(sessionId, exerciseId) }
