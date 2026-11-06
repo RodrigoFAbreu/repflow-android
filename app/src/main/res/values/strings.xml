@@ -150,7 +150,7 @@
     <string name="workout_active_plan_rest">Rest: %1$ds</string>
     <string name="workout_active_load_label">Weight</string>
     <string name="workout_active_reps_label">Reps</string>
-    <string name="workout_active_duration_label">Seconds</string>
+    <string name="workout_active_duration_label">Time (m:ss)</string>
     <string name="workout_active_rpe_label">Effort (RPE)</string>
     <string name="workout_active_warmup_label">Warm-up set</string>
     <string name="workout_active_warmup_suffix">(warm-up)</string>
@@ -177,8 +177,8 @@
     <string name="training_plan_editor_row_target_warmup_sets_label">Warm-up sets</string>
     <string name="training_plan_editor_row_rep_min_label">Min reps</string>
     <string name="training_plan_editor_row_rep_max_label">Max reps</string>
-    <string name="training_plan_editor_row_duration_min_label">Min seconds</string>
-    <string name="training_plan_editor_row_duration_max_label">Max seconds</string>
+    <string name="training_plan_editor_row_duration_min_label">Min time</string>
+    <string name="training_plan_editor_row_duration_max_label">Max time</string>
     <string name="training_plan_editor_row_rest_label">Rest</string>
     <string name="training_plan_editor_row_optional_label">Optional</string>
     <string name="training_plan_editor_row_move_up_content_description">Move up</string>
@@ -542,7 +542,7 @@
     <string name="workout_focus_weight_caption">kg · %1$s steps</string>
     <string name="workout_focus_reps_target">target %1$d–%2$d</string>
     <string name="workout_focus_seconds_target">target %1$d–%2$d s</string>
-    <string name="workout_focus_seconds_held">seconds held</string>
+    <string name="workout_focus_time_hint">Steps of %1$s. Tap the value to type m:ss.</string>
     <string name="workout_focus_less_weight">Less weight</string>
     <string name="workout_focus_more_weight">More weight</string>
     <string name="workout_focus_fewer_reps">Fewer reps</string>
@@ -704,7 +704,7 @@
     <string name="settings_default_rest_sheet_title">Default rest</string>
     <string name="settings_default_rest_sheet_caption">Used when neither the plan nor the exercise sets a rest.</string>
     <string name="settings_default_rest_other">Other</string>
-    <string name="settings_default_rest_keypad_title">Rest in seconds</string>
+    <string name="settings_default_rest_keypad_title">Rest</string>
     <string name="settings_extra_set_fields_sheet_title">Extra set fields</string>
     <string name="settings_extra_set_fields_always">Always shown</string>
     <string name="settings_extra_set_fields_always_meta">RPE, pain and technique stay open while you log.</string>

@@ -16,7 +16,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repflow.app.R
@@ -27,7 +29,9 @@ import com.repflow.app.presentation.designsystem.components.RepFlowNumericKeypad
 import com.repflow.app.presentation.designsystem.components.RepFlowPillPicker
 import com.repflow.app.presentation.designsystem.components.RepFlowPillPickerDefaults
 import com.repflow.app.presentation.designsystem.components.RepFlowStepper
+import com.repflow.app.presentation.designsystem.components.RepFlowStepperDefaults
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperSizing
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.exercise.editor.InlineError
 
 /**
@@ -75,6 +79,7 @@ internal fun PlannedExerciseTargets(
             spec = PlanRowStepping.rest,
             onValueChange = { actions.onRestSecondsChanged(id, it) },
             descriptions = R.string.training_plan_editor_rest_decrease to R.string.training_plan_editor_rest_increase,
+            durationEntry = true,
             format = { restClock(it) },
         )
         RestPresets(restSecondsText = row.restSecondsText, onRestSecondsChanged = { actions.onRestSecondsChanged(id, it) })
@@ -93,7 +98,7 @@ internal fun PlannedExerciseTargets(
     }
 }
 
-/** The rep range (`Min reps` / `Max reps`), or `Min seconds` / `Max seconds` for a duration exercise. */
+/** The rep range (`Min reps` / `Max reps`), or `Min time` / `Max time`, read and typed as m:ss, for a duration exercise. */
 @Composable
 private fun RangeLines(
     row: PlannedExerciseRowUiState,
@@ -109,6 +114,8 @@ private fun RangeLines(
             spec = PlanRowStepping.durationMin,
             onValueChange = { actions.onDurationMinChanged(id, it) },
             descriptions = minDescriptions,
+            durationEntry = true,
+            format = { formatDuration(it.toLong()) },
         )
         StepperLine(
             label = stringResource(R.string.training_plan_editor_row_duration_max_label),
@@ -116,6 +123,8 @@ private fun RangeLines(
             spec = PlanRowStepping.durationMax,
             onValueChange = { actions.onDurationMaxChanged(id, it) },
             descriptions = maxDescriptions,
+            durationEntry = true,
+            format = { formatDuration(it.toLong()) },
         )
     } else {
         StepperLine(
@@ -139,7 +148,12 @@ private fun RangeLines(
  * One `4a` stepper line: the label at 13.5, then CP3's stepper at `4a`'s
  * in-line size (44 buttons, value 16 tabular). An empty field shows `–`; its
  * first step lands on [PlanStepperSpec.startWhenEmpty]. The value opens the
- * keypad, titled with the line's label.
+ * keypad on the line's current value, titled with the line's label; blank or
+ * unparsable text opens it empty. With [durationEntry] that keypad is the m:ss
+ * pad, and the text stays whole seconds.
+ *
+ * The value cell grows with the font, so `120:00` stays on one line. The label
+ * takes what is left and wraps if it must.
  */
 @Composable
 private fun StepperLine(
@@ -148,6 +162,7 @@ private fun StepperLine(
     spec: PlanStepperSpec,
     onValueChange: (String) -> Unit,
     descriptions: Pair<Int, Int>,
+    durationEntry: Boolean = false,
     format: @Composable (Int) -> String = { it.toString() },
 ) {
     var keypadOpen by rememberSaveable { mutableStateOf(false) }
@@ -170,13 +185,15 @@ private fun StepperLine(
             incrementContentDescription = stringResource(descriptions.second),
             sizing = LineStepperSizing,
             onValueClick = { keypadOpen = true },
-            modifier = Modifier.width(LineStepperWidth),
+            modifier = Modifier.width(lineStepperWidth(LocalDensity.current.fontScale)),
         )
     }
     if (keypadOpen) {
         RepFlowNumericKeypad(
             title = label,
             allowDecimal = false,
+            initialValue = value?.toBigDecimal(),
+            durationEntry = durationEntry,
             onDismissRequest = { keypadOpen = false },
             onConfirm = { entered ->
                 keypadOpen = false
@@ -237,7 +254,12 @@ private val LineStepperSizing =
         valueFontSize = 16.sp,
         valueLineHeight = 22.sp,
     )
-private val LineStepperWidth = 164.dp
+
+/** `4a`'s 164 at font scale 1: the two buttons and their gaps, and a 64 value cell that grows with the font. */
+private fun lineStepperWidth(fontScale: Float): Dp =
+    LineStepperSizing.buttonSize * 2 + RepFlowStepperDefaults.gap * 2 + LineStepperValueWidth * fontScale
+
+private val LineStepperValueWidth = 64.dp
 private val LineVerticalPadding = 7.dp
 private val LineLabelFontSize = 13.5.sp
 private val TargetsStartPadding = 6.dp

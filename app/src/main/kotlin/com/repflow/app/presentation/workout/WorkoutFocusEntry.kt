@@ -63,6 +63,7 @@ import com.repflow.app.presentation.designsystem.components.RepFlowScaleRow
 import com.repflow.app.presentation.designsystem.components.RepFlowSheet
 import com.repflow.app.presentation.designsystem.components.RepFlowStepper
 import com.repflow.app.presentation.designsystem.components.RepFlowStepperMath
+import com.repflow.app.presentation.designsystem.components.formatDuration
 import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.designsystem.icons.RepFlowIcons
 import com.repflow.app.presentation.designsystem.repFlowSecondaryTextColor
@@ -244,7 +245,7 @@ internal class FocusEntries(
 
 /**
  * The stepper cards for [trackingType]: `Weight` and `Reps` for weight & reps,
- * `Reps` alone for reps only, `Seconds` alone for a timed exercise - only the
+ * `Reps` alone for reps only, `Time (m:ss)` alone for a timed exercise - only the
  * fields `WorkoutSet.create` accepts for that type.
  *
  * `4a` sets the two cards side by side. Below [SideBySideMinWidth] they stack
@@ -361,9 +362,8 @@ private fun SecondsCard(
     val label = stringResource(R.string.workout_active_duration_label)
     StepperCard(
         label = label,
-        caption =
-            durationRange?.let { stringResource(R.string.workout_focus_seconds_target, it.first, it.last) }
-                ?: stringResource(R.string.workout_focus_seconds_held),
+        caption = durationRange?.let { stringResource(R.string.workout_focus_seconds_target, it.first, it.last) },
+        hint = stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong())),
         modifier = modifier,
     ) {
         RepFlowStepper(
@@ -374,17 +374,20 @@ private fun SecondsCard(
             decrementContentDescription = stringResource(R.string.workout_focus_fewer_seconds),
             incrementContentDescription = stringResource(R.string.workout_focus_more_seconds),
             allowDecimal = false,
+            durationEntry = true,
             emptyText = stringResource(R.string.workout_focus_value_empty),
+            format = { formatDuration(it.toLong()) },
         )
     }
 }
 
-/** `4a`'s stepper card: radius 12, surface, hairline, padding 12/10; label, stepper, caption. */
+/** `4a`'s stepper card: radius 12, surface, hairline, padding 12/10; label, stepper, caption, then `20g`'s hint. */
 @Composable
 private fun StepperCard(
     label: String,
     caption: String?,
     modifier: Modifier,
+    hint: String? = null,
     stepper: @Composable () -> Unit,
 ) {
     RepFlowCard(
@@ -394,9 +397,9 @@ private fun StepperCard(
         Column(verticalArrangement = Arrangement.spacedBy(RepFlowSpacing.gapSm)) {
             FocusFieldLabel(text = label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             stepper()
-            if (caption != null) {
+            listOfNotNull(caption, hint).forEach { line ->
                 Text(
-                    text = caption,
+                    text = line,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = CaptionFontSize),
                     color = repFlowSecondaryTextColor(MaterialTheme.colorScheme),
                     textAlign = TextAlign.Center,

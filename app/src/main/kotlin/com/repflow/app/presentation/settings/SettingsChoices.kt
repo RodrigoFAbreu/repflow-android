@@ -188,10 +188,9 @@ internal val DefaultRestPresets: List<Int> = listOf(ONE_MINUTE, ONE_AND_A_HALF_M
 
 /**
  * `Default rest`'s sheet (`7c` N2): a title and caption over the four presets
- * and `Other`; the selected choice chip carries a check (`8a` answer 11). A preset saves and closes; `Other` opens the existing numeric
- * keypad (whole seconds; the keypad itself is unchanged), and a value that is
- * not a preset then stands in `Other`'s place as a selected chip - tapping it
- * reopens the keypad.
+ * and `Other`; the selected choice chip carries a check (`8a` answer 11). A preset saves and closes; `Other` opens the m:ss
+ * keypad (`10l`) on the current rest, and a value that is not a preset then
+ * stands in `Other`'s place as a selected chip - tapping it reopens the keypad.
  */
 @Composable
 internal fun DefaultRestSheet(
@@ -204,6 +203,8 @@ internal fun DefaultRestSheet(
         RepFlowNumericKeypad(
             title = stringResource(R.string.settings_default_rest_keypad_title),
             allowDecimal = false,
+            initialValue = currentSeconds.toBigDecimal(),
+            durationEntry = true,
             onDismissRequest = { keypadOpen = false },
             onConfirm = { value ->
                 onSelect(value.toInt())
