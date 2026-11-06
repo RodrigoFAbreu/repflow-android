@@ -2153,14 +2153,23 @@ class ActiveWorkoutScreenTest {
         node(R.string.workout_focus_clock_stop).assertIsDisplayed()
     }
 
-    /** The first composition comes well inside a second of this start moment, so this is the target's own second. */
+    /** The time is held, so these are the second before the target and the target's own, whatever the device's speed. */
     @Test
     fun theCardChangesAtExactlyTheTarget() {
-        val now = System.currentTimeMillis()
+        val startedAt = System.currentTimeMillis()
+        var now = startedAt + SIXTY_SECONDS_MILLIS - ONE_SECOND_MILLIS
         val exercise = timedExercise()
-        setFocus({ exercise }, prepareEntry = { startClock(now - SIXTY_SECONDS_MILLIS) })
+        setFocus({ exercise }, prepareEntry = { startClock(startedAt) }, nowMillis = { now })
 
-        composeRule.onNodeWithText("Target 1:00 reached · still counting").performScrollTo().assertIsDisplayed()
+        readout().performScrollTo().assert(hasText("0:59"))
+        composeRule.onNodeWithText(countingUp("Target 1:00")).assertIsDisplayed()
+        composeRule.onNode(hasText("still counting", substring = true)).assertDoesNotExist()
+
+        now = startedAt + SIXTY_SECONDS_MILLIS
+        composeRule.waitUntil("the next tick to read 1:00", CLOCK_TICK_WAIT_MILLIS) {
+            composeRule.onAllNodes(hasTestTag(TIMED_SET_CLOCK_READOUT_TAG) and hasText("1:00")).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Target 1:00 reached · still counting").assertIsDisplayed()
     }
 
     @Test
@@ -2601,6 +2610,8 @@ private const val FORTY_SECONDS_MILLIS = 40_000L
 private const val THIRTY_EIGHT_SECONDS_MILLIS = 38_000L
 private const val TWENTY_SECONDS_MILLIS = 20_000L
 private const val ONE_HOUR_MILLIS = 3_600_000L
+private const val ONE_SECOND_MILLIS = 1_000L
+private const val CLOCK_TICK_WAIT_MILLIS = 5_000L
 private const val JUST_UNDER_A_SECOND_MILLIS = 999L
 private const val CLOCK_MAIN_BUTTON_HEIGHT = 52
 private const val CLOCK_START_AGAIN_HEIGHT = 48

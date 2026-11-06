@@ -53,7 +53,7 @@ import java.time.Instant
  * screen reader announce itself continuously. It carries its words for when the
  * user focuses it, as the top bar's elapsed time does.
  *
- * @param nowMillis read at each tap, so a test can hold what `Stop` writes.
+ * @param nowMillis read at each tick and each tap, so a test can hold what the time shows and what `Stop` writes.
  * @param onClockStarted called on `Start` and `Start again`, never on `Stop`: the next set has begun, so a rest is over.
  */
 @Composable
@@ -67,7 +67,7 @@ internal fun TimedSetClockCard(
     val startedAt = entry.clockStartedAtMillis
     val stopped = entry.clockStoppedSeconds
     val running = startedAt != null
-    val shown = if (startedAt != null) rememberClockSeconds(startedAt) else stopped ?: 0
+    val shown = if (startedAt != null) rememberClockSeconds(startedAt, nowMillis) else stopped ?: 0
     val pastTarget = running && target != null && shown >= target.first
     val scheme = MaterialTheme.colorScheme
     val edge =
@@ -119,8 +119,10 @@ internal fun TimedSetClockCard(
  * start moment would otherwise read `0:-5`.
  */
 @Composable
-private fun rememberClockSeconds(startedAtMillis: Long): Long =
-    rememberElapsedSeconds(Instant.ofEpochMilli(startedAtMillis)).coerceAtLeast(0)
+private fun rememberClockSeconds(
+    startedAtMillis: Long,
+    nowMillis: () -> Long,
+): Long = rememberElapsedSeconds(Instant.ofEpochMilli(startedAtMillis), nowMillis).coerceAtLeast(0)
 
 @Composable
 private fun ClockReadout(

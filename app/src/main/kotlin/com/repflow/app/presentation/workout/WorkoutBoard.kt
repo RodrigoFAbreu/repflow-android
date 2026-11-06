@@ -29,6 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -380,20 +381,30 @@ private fun EmptyBoard() {
     }
 }
 
-/** Seconds since [startedAt], re-read from the wall clock every second - derived, never counted. */
+/**
+ * Seconds since [startedAt], re-read from the wall clock every second - derived, never counted.
+ * [nowMillis] lets a test hold that clock.
+ */
 @Composable
-internal fun rememberElapsedSeconds(startedAt: Instant): Long {
-    var elapsed by remember(startedAt) { mutableLongStateOf(secondsSince(startedAt)) }
+internal fun rememberElapsedSeconds(
+    startedAt: Instant,
+    nowMillis: () -> Long = System::currentTimeMillis,
+): Long {
+    val currentNowMillis by rememberUpdatedState(nowMillis)
+    var elapsed by remember(startedAt) { mutableLongStateOf(secondsSince(startedAt, nowMillis())) }
     LaunchedEffect(startedAt) {
         while (true) {
-            elapsed = secondsSince(startedAt)
+            elapsed = secondsSince(startedAt, currentNowMillis())
             delay(ELAPSED_TICK_MILLIS)
         }
     }
     return elapsed
 }
 
-private fun secondsSince(startedAt: Instant): Long = (Instant.now().toEpochMilli() - startedAt.toEpochMilli()) / MILLIS_PER_SECOND
+private fun secondsSince(
+    startedAt: Instant,
+    nowMillis: Long,
+): Long = (nowMillis - startedAt.toEpochMilli()) / MILLIS_PER_SECOND
 
 private const val ELAPSED_TICK_MILLIS = 1_000L
 private const val MILLIS_PER_SECOND = 1_000L
