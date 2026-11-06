@@ -15214,7 +15214,7 @@
       "registry_path": "docs/ai-workflow/registry/timed-set-clock-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-set-clock-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -15327,7 +15327,240 @@
           "workflow_release": "2.28.0"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "12b154eeca286d3759766a258ef008a1d39ffa53bce920cb03adf2cc34da7ede",
+        "approved_review_content_id": "51df9380f62ab7ef0cb14150d44a0a31b795d5039aa2a60bd6bd9fe50dae2b69",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/progression/ProgressionRecommendationRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "27dbf6895420c58cb7c9412164dc0b71d6dee58c"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutErrorRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "974a0948fb4f1ea9bf45c37997be375592ad1f87"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutLeaveRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0fb4733e7aeb40234c9a1d1876d38107c81a9358"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d3e8acba781086331d4f997e7f295a0a219fe56c"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutSetEntryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d2147e01c5a60f5b37e2cc3457c4cabb0bc29863"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ClockStartEndsRestRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9b45b174d36a36cf31f888961d9c67042acc122d"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/EntryStepperWidthTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9c6e3f3aea151909250e674366d78c9ee7a99a59"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/workout/SkipRestTimer.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ee6294fdf426c96b1e917b9c880281dc535a70a7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIcons.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "78ae74cbab35a13c901e69e02901998e790eeef0"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowNavHost.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c7b891ebb39715d9f605af2be9a89e34be492c34"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bee933db6bf388f317a03a828a5683e5f226116b"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fd49f626c27fe6b5920dc82d9933cfc822d2c09e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7bc11218f81c16d96fb26c548360f9ea02809e66"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/TimedSetClock.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b52cc7f127ffc46f0703038b012255ab3e41f23d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutBoard.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9f553b36b61234e651cf3cd230bab49d6bd58303"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocus.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0f2265f1f9d36380415329b53e129f928f8d3741"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusEntry.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ec153a25a7e85c7d5fd97d629ead42a2405ddaf5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusSets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e19886e63d9b0f7fe9dd070b61aa2026221fda41"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_play_bold.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "cb7b58e7ce2a7290ecf744c0a1b3d0df39e123fa"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_stop_bold.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "869da856b563d3b6bf89964a81f1fc1f5869625f"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9149886f1d00d3c1e7bdea3dda13a8a66217dff0"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/RestTimerUseCasesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c0e31e2b7e7024e6a7ad4d79a9b34bc9e55cd96d"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIconsTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d4b0c2f9fbc01ea1c06e0c40a653b6b8b41b51fe"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutActionOrderTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "552b1d6799b1214a2556dc89d932a17059fbae77"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/SetEntryStateTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1779a7f8fce39bc166ccefc0b1de09a6b1a11e2d"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "4552fa6caf0f57b07152c8022b9be1d53da3a1da"
+          },
+          {
+            "path": "docs/ai-workflow/registry/timed-set-clock-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ac6efec27e71a8d418b286b5b2f64925bb9788eb"
+          }
+        ],
+        "reviewed_content_commit": "10b291fd86f3028963a83a6925195558ca966fe5",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T23:43:05Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "51df9380f62ab7ef0cb14150d44a0a31b795d5039aa2a60bd6bd9fe50dae2b69",
+            "ledger": {
+              "local": {
+                "bundle_id": "12b154eeca286d3759766a258ef008a1d39ffa53bce920cb03adf2cc34da7ede",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "d21b17be77c1679a06f3e18e179efe6fbf6244449b2e06660fe36fe80f9c2b7f",
+                "ledger_entry_sha256": "dc0d78d19b653d1de94db7000d2c15f5bee83d5d416ccb566d7c13542194bfad",
+                "run_ref": "session:local .ai-review/timed-set-clock/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "12b154eeca286d3759766a258ef008a1d39ffa53bce920cb03adf2cc34da7ede",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "da6beb31db60791f4895f8d9a386f61fe5a423578f8c8adf296c73fa98d3acfc",
+                "ledger_entry_sha256": "45b3245e4cbfb79b38effc69652c1d464390dfd91c0910ce807c4517d8a8b4d7",
+                "run_ref": "codex:20261106T234009Z-ff773200",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T23:43:05Z",
+          "workflow_release": "2.28.0"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
@@ -15358,12 +15591,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 1,
-          "external": 1
+          "local": 2,
+          "external": 2
         }
       },
-      "state_revision": 19,
-      "last_transition": "2026-11-06T23:00:35Z",
+      "state_revision": 22,
+      "last_transition": "2026-11-06T23:43:05Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -15610,20 +15843,56 @@
               "at": "2026-11-06T22:04:28Z"
             }
           ]
+        },
+        "F-1966bcfe1c33": {
+          "digest": "1966bcfe1c3384833bb411e23d9217a593e5f5f4439e85f28d1a2e6895073a08",
+          "text": "**O1: `Start` sits behind the rest strip from the fourth set row on.** Read on the 1080×2340 AVD at font scale 1.0, unscrolled, with four logged rows, no target line and a rest showing: `Start`'s label is at y 1586 to 1648 and the strip's top is at about 1571, so only a sliver of the button's top edge shows. `20r`'s flow is exactly this moment: `Log set`, the rest, then `Start`. Three rows with no target line leave the label clear, at 1448 to 1510. A target line adds about 71 px by calculation, which wasn't run, so three rows with a target already put the label's foot behind the strip, and a plan's pending rows count as rows. A second workout pushes it further: with no sets logged, `Last time:` and the suggestion strip put `Start` 276 px lower than in a first workout (1107 against 831). Nothing is blocked and nothing is at risk: a swipe reached the button and the tap ended the rest, and `Skip rest` stays in view. The cause is the older difference the plan leaves alone, the set list above the entry, so this isn't a change for this item. It is worth the owner's look at acceptance, and a follow-up could scroll the button into view when a rest starts or move the list where the boards d",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "51df9380f62ab7ef0cb14150d44a0a31b795d5039aa2a60bd6bd9fe50dae2b69",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T23:39:29Z"
+            }
+          ]
+        },
+        "F-13871ba355d6": {
+          "digest": "13871ba355d649f2ffba4cb45466b85f802bb33886cdab6e9f668c8738d65f5e",
+          "text": "**O2: Nothing holds the stopped card's plain look past its target.** With `running &&` removed from `pastTarget` in `TimedSetClock.kt`, a card stopped past its target keeps the accent time and the accent edge, and all 117 tests in `ActiveWorkoutScreenTest` still pass. The plan's table draws those only while counting, the code does that, and CP3's walk compared it by eye. One more case in the look tests would hold it: a clock stopped at 90 on a 60 target, with the plain time and the hairline.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "51df9380f62ab7ef0cb14150d44a0a31b795d5039aa2a60bd6bd9fe50dae2b69",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T23:39:29Z"
+            }
+          ]
         }
       },
       "implementation_review_stages": {
-        "review_content_id": "958bb488dafb6fb657c35df694f6e88a3bc818b52818482b28babc4549054315",
+        "review_content_id": "51df9380f62ab7ef0cb14150d44a0a31b795d5039aa2a60bd6bd9fe50dae2b69",
         "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
-          "bundle_id": "de4f0d78c9bc07bf3d3cdf55b70fd60a515b367e3cd652836f390f3d4676d174",
+          "bundle_id": "12b154eeca286d3759766a258ef008a1d39ffa53bce920cb03adf2cc34da7ede",
           "verdict": "APPROVE",
-          "round": 1,
-          "completed_at": "2026-11-06T22:01:10Z",
-          "verdict_sha256": "8be300c7636aac831f307a9f2cb76ebc931df0cedd5b64528054a0bafa94a9f6",
+          "round": 2,
+          "completed_at": "2026-11-06T23:39:29Z",
+          "verdict_sha256": "d21b17be77c1679a06f3e18e179efe6fbf6244449b2e06660fe36fe80f9c2b7f",
           "run_ref": "session:local .ai-review/timed-set-clock/feedback/REVIEW_FEEDBACK.md",
           "reviewer_model": "anthropic/claude-opus-5-5"
         },
-        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "12b154eeca286d3759766a258ef008a1d39ffa53bce920cb03adf2cc34da7ede",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T23:41:43Z",
+          "verdict_sha256": "da6beb31db60791f4895f8d9a386f61fe5a423578f8c8adf296c73fa98d3acfc",
+          "run_ref": "codex:20261106T234009Z-ff773200",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
       }
     }
   },
