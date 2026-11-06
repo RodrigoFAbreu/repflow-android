@@ -319,6 +319,27 @@ class HomeScreenTest {
         assertLinkPlacement(HomeBackupReminder.NoBackupYet, "No backup yet", fontScale = 1f, ownLine = false)
     }
 
+    /** Boards `10n` and `10o` draw the line under `Last workout`, whatever the font scale does to the link. */
+    @Test
+    fun theLineComesUnderLastWorkout() {
+        val ended = Instant.parse("2026-08-10T10:00:00Z")
+        show(
+            HomeUiState(
+                date = today,
+                lastWorkout = HomeLastWorkout.Summary("Legs", ended.minusSeconds(3_600), ended, loadIncreases = 0),
+                backupReminder = HomeBackupReminder.LastBackup(21),
+            ),
+        )
+        val line =
+            composeRule
+                .onNodeWithText("Last backup 21 days ago")
+                .performScrollTo()
+                .fetchSemanticsNode()
+        val card = composeRule.onNodeWithText("Legs").fetchSemanticsNode()
+
+        assertTrue(line.positionInRoot.y >= card.positionInRoot.y + card.size.height)
+    }
+
     private fun assertLinkPlacement(
         reminder: HomeBackupReminder,
         words: String,
