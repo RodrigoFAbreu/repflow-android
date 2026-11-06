@@ -13515,7 +13515,7 @@
       "registry_path": "docs/ai-workflow/registry/set-edit-fields-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/set-edit-fields-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 1,
       "functional_review_round": null,
@@ -13624,7 +13624,138 @@
           "workflow_release": "2.27.0"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+        "approved_review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f845a2fd0cb80b5827db7435f7b6fd0a81572bb7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocus.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2cdec4402f99b584ad9fe1be9831e612ed809818"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusEntry.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "531df3cd934ffba1554b279956f279c813b0884d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusSets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b29ee25bfa59266acd81e21297f13475e255d075"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6bfcce9d7c67059e97b6e9e0245504fa653792ad"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/CorrectedSetRecommendationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "23360ce7ebb68070a4108656254ee44b0b5e7ac8"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/workout/UndoAndEditLastWorkoutSetTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d3fff952a88ee725f997779c4c88b3b457b675a7"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6e2aa6c99cd9e13d80dbed5c841078620a364f0c"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "839a17620fa6869b7b7fb19c2b44717880e49a31"
+          },
+          {
+            "path": "docs/ai-workflow/registry/set-edit-fields-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "83d2fb9edb59d585cae432d52a378782294c9370"
+          }
+        ],
+        "reviewed_content_commit": "4a3e4c1178f23b5601c46d421993c10224bb5973",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T13:23:17Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+            "ledger": {
+              "local": {
+                "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "7c3b34dffa2c60643773042b597dc095d93c99eff18b4013e6529635055f8f77",
+                "ledger_entry_sha256": "0cd0bdb8548d6176cdb6697b2669750231d46c2d16d1eb057803234e086ceeb2",
+                "run_ref": "session:local .ai-review/set-edit-fields/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+                "verdict": "APPROVE",
+                "round": 1,
+                "verdict_sha256": "4e47a3d3e66a19bcbe3df1dc73acbbd32d340b41f699821a8f46f69b5284c71f",
+                "ledger_entry_sha256": "24ea5070b6ce8adff3256be7267406d5ab38d5459109b4dc8305dc65d0443904",
+                "run_ref": "codex:20261106T131931Z-99c6c143",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T13:23:17Z",
+          "workflow_release": "2.27.0"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "55d524248f91b3af4cebccec12181153a8d6ede26759e5447c997bed2048af6d",
@@ -13655,12 +13786,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 0,
-          "external": 0
+          "local": 1,
+          "external": 1
         }
       },
-      "state_revision": 14,
-      "last_transition": "2026-11-06T12:47:50Z",
+      "state_revision": 17,
+      "last_transition": "2026-11-06T13:23:17Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -13837,6 +13968,97 @@
               "at": "2026-11-06T11:38:58Z"
             }
           ]
+        },
+        "F-13ce2ddef9ec": {
+          "digest": "13ce2ddef9eccc96fdc4f72a42b5b1d113caca933dbd0138eb595f64511fc367",
+          "text": "**A correction that can't be saved loses the taps and doesn't say why.** On the AVD: reps stepped down to 0, RPE changed to 7, `Save`. The sheet closes and the snackbar says `Couldn't complete that. Try again.` The stored set is unchanged, and on reopening the sheet shows the stored values, so the tapped RPE is gone. Trying again can't work, because 0 reps was the cause. The closing comes first at `WorkoutFocus.kt:217`, as it did before this item, but there is now more to lose. Logging avoids this with `SetEntryState.canLog` (`WorkoutFocusEntry.kt:163`). The same rule could disable `Save`, or the sheet could stay open until the save succeeds. Worth a follow-up, not a reason to hold this item: nothing stored is wrong and the failure is shown.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-2844de99f58b": {
+          "digest": "2844de99f58b59fbcaf9bbd683317496d20b406c0cfe604ceb9153690024f7d2",
+          "text": "**A scrolled sheet can be flicked shut, dropping unsaved taps with no warning.** Confirmed on the AVD at font 2.0, from the foot: one 600 px flick in 200 ms left the sheet open, and a second closed it. This is what someone does to go back up and change a value. It needs a sheet taller than the screen, so it doesn't arise at font 1.0 in portrait on the 384 dp AVD. It is `ModalBottomSheet`'s own behaviour, nothing stored changes and the closing is visible, so it fits the plan's \"dismissing saves nothing\". Keep it on the functional checklist for the owner. If they want it to resist, `rememberModalBottomSheetState`'s `confirmValueChange` in `RepFlowSheet` is the likely place, as its own item.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-658a601ee173": {
+          "digest": "658a601ee173f7b0f5d24acf3a9384ca2ccb083eb92b7766b0640f9738193af0",
+          "text": "**The stacking rule is only tested at font 2.0.** R4 says the buttons stack above 1.1, but `atLargeFontSaveCanBeScrolledToAndPressedWithCancelAboveIt` would still pass with the threshold moved to 1.5, and only CP1's look saw 1.3. `LARGE_FONT_SCALE_MEDIUM` is already in the test file, so one more case at 1.3 closes this.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-17765b5bd2e8": {
+          "digest": "17765b5bd2e8dcb6a1c1cb96e276bbfbd54481c3d744f8dbacbd0aa5ee8ad00b",
+          "text": "**No automated test reads a corrected value back through Room.** The declared limit is accurate. By reading, `LocalWorkoutRepository.update` deletes and reinserts the session's rows through `WorkoutEntityMapper`, which carries all three fields both ways, and the AVD run above stored them correctly. A small instrumented test on `update` would keep this from depending on a manual look.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        },
+        "F-7235bd3d8699": {
+          "digest": "7235bd3d86990589d42e155e0f94f41098759163c40f27cc1a6406eedf78a49a",
+          "text": "**Two file headers still cite the old artboard for the sheet.** `WorkoutFocusSets.kt:55-59` and `WorkoutFocusEntry.kt:72-76` point to `4a`'s `:1549-1581`, while the sheet's KDoc now correctly says `20i`. `WorkoutFocusEntry.kt` also describes the sheet as one of its own controls, though it lives in `WorkoutFocusSets.kt`.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 1,
+              "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T13:18:47Z"
+            }
+          ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "1b4e8b53adcb0c36f47f4e4360ad3bdacf175d8cfa2fcfce9348730aa6cdf840",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-06T13:18:47Z",
+          "verdict_sha256": "7c3b34dffa2c60643773042b597dc095d93c99eff18b4013e6529635055f8f77",
+          "run_ref": "session:local .ai-review/set-edit-fields/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "df6b00b2117349488f99896d930d7251a1e33aa86ff47526ecf58ea3ee00a4da",
+          "verdict": "APPROVE",
+          "round": 1,
+          "completed_at": "2026-11-06T13:21:27Z",
+          "verdict_sha256": "4e47a3d3e66a19bcbe3df1dc73acbbd32d340b41f699821a8f46f69b5284c71f",
+          "run_ref": "codex:20261106T131931Z-99c6c143",
+          "reviewer_model": "openai/gpt-6.1-sol"
         }
       }
     }
