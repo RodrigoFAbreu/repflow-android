@@ -60,7 +60,40 @@ Timed sets and rest use m:ss while logging and in History, and the number pad op
 
   Seen and left as it is: with the notification prompt declined once, it comes back when the phone rotates during a rest, and landing on the pad behind it does no harm to the entry. `settings-alert-rows` already owns these prompts.
 
-**Next action:** local implementation review of the bundle at `.ai-review/timed-entry-mmss/current/`.
+**Next action:** perform the functional review below, write findings to `.ai-review/timed-entry-mmss/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification is current: production code last changed in `c3e2b48` (implementation review round 1, I1), `d30e2e3` added a test only, and later commits are workflow records. The last full run on `d30e2e3` is in the review bullet above: `spotlessCheck`, `detekt`, `lintDebug` (0 errors), 903 JVM tests, 600 instrumented tests on `emulator-5554`, 0 failures.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Install with `./gradlew installDebug` on a fresh install. No feature flags, no network. Font scale is changed in the AVD's Settings > Display; restore it to 1.0 afterwards.
+
+**Test data.** An exercise `Plank` with the Time type, an exercise `Bench` with weight and reps (step `2.5` or `5 kg`), and a training plan with `Plank` as a row. Make them through the app.
+
+**F1 - Timed pad types m:ss (R2).** Start a workout with `Plank`. The empty time card shows `—`; tap it. Expected: an empty pad titled for the time, `minutes and seconds` under it, `00` in the decimal cell. Press `1 3 0`: it reads `1:30`. `Set`: the stepper shows `1:30`, the label says `Time (m:ss)` with `Steps of 0:05. Tap the value to type m:ss.` below it. `Log set` stores 90 seconds.
+
+**F2 - Pad opens on the current value (R3).** Tap the `1:30` stepper again. Expected: the pad opens on `1:30`, selected (tinted ring, `Selected: type to replace` or `minutes and seconds`). Press a digit: it replaces the value. Reopen and press Backspace: it clears (`Clear value`). `Cancel` keeps `1:30`. `Set` with nothing typed keeps `1:30`. On `Bench`, the Weight pad opens on its value selected and `7` replaces it; the Reps pad says `Whole numbers only` and its `.` is greyed and ignored.
+
+**F3 - Plan editor and Settings (R5).** Plan editor, the `Plank` row: `Min time`, `Max time` and `Rest` show clocks and open the m:ss pad on their value; `1 2 0 0 0` on `Max time` shows `120:00` on one line. Settings > `Default rest` > `Other`: titled `Rest`, opens on the current value; `1 3 5` reads `1:35`, stores 95, and the row says `1:35`. Other pads (e.g. the plan's sets/reps lines) open on their value, a blank line opens empty.
+
+**F4 - Everything reads m:ss (R1).** Log sets of `1:30`, `0:45`, then in a later workout `2:00` and `0:15`. Expected: the plan row meta (`4 × 0:30–1:30 · 1 warm-up · 1:30 rest`), the target and `Last:` lines, set rows, the pending row's target and rest, the warm-up hint, History's set values, and the summary (recap `2 sets · 1:30, 0:45`, best set and delta as `+0:30` or `−1:45`) show clocks, never raw seconds. Progress is out of scope.
+
+**F5 - Stored values and backup (R4).** With the app stopped, `sqlite3` on the database (or export a backup): sets hold whole seconds (`90`, `45`, `120`, `15`), the plan row `30`/`90` and rest `90`. A backup/CSV export keeps raw seconds.
+
+**F6 - Rotation keeps the entry (review fix I1).** On `Bench` open the Weight pad on its value, rotate: the pad stays open on the same value, selected. Type `45`, rotate back: still `45`, one entry. `Cancel` leaves the old value, and the stepper doesn't change.
+
+**F7 - Look (R6).** Light and dark, font 1.0, then 1.3 and 2.0: the pad matches boards `50h`/`10l` (title left, value centred at 40 sp in a tinted ring while selected, one line under it), nothing important clipped, `120:00`, `15:00` and `1:30` on one line in the plan editor. Landscape: the content scrolls and `Set` is reachable.
+
+**F8 - TalkBack, best effort (CP wrap-up fix).** With TalkBack (there is no audio on the AVD; read its speech display): the time stepper is spoken as `2 minutes` or `1 minute 30 seconds`, the pad's value as the same words, `Selected` before them, and Backspace as `Clear value`.
+
+**Known limitations / out of scope.**
+- Progress's seconds belong to `progress-recovery-polish`, the plan row's rest to `plan-editor-rows` (both queued).
+- Read-only clocks (`Last: 2:00`, History) read as a time of day on the Google TTS voice (e.g. "two o'clock"); only the stepper and pad have a spoken form.
+- At font scale 2.0 in portrait the pad's `Cancel` breaks as `Canc/el`; the summary's `TRAINED` value, History's `VOLUME (KG)`, the plan's rest presets and the bottom bar's `Progress` clip or break. None are changed by this item.
+- In landscape only keys `1`-`9` fit without a swipe (optional finding `O1`, follow-up).
+- Notification and exact-alarm prompts appear on the first rest; with the prompt declined it can return on rotation (`settings-alert-rows`).
+- On a 384 dp screen the pending row breaks between `Rest:` and the clock (row layout belongs to `focus-just-logged`).
+- The full wrap-up runs come at acceptance.
 
 ## `backup-reminder` — complete (accepted by policy 2026-11-06)
 
