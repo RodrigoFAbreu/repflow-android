@@ -162,6 +162,56 @@ precondition (INV-5). Read `accept-milestone.md` beside this section: it runs
 that command's steps 0, 2, 2a, 2b and 3 to 8 **unchanged, cited by number**,
 and this stage states only what differs.
 
+**Plain commands first** (workflow-2.26.0). Read the gate with one plain,
+read-only command instead of improvising Python:
+
+```
+python3 scripts/workflow_state.py --acceptance-gate <work-item-id>
+```
+
+It prints one JSON report and exits 0 whenever it prints one (ready or not; exit 1
+is a JSON `error`). Read `ready`, `blockers` (each with a `code` and a `detail`) and
+`dispositions` (`missing` by key with its `label`, and the `skeleton` to copy into
+the dispositions file; `python3 scripts/workflow_state.py --finding-dispositions
+<work-item-id>` prints the same skeleton). `gate` is `evaluate_gate`'s own result.
+`stored_pr_fact` is information only: step 1's query replaces the stored fact before
+anything is decided, so a stale stored fact never blocks the re-run. A
+`ready: false` report is the same stop as step 2's: write nothing. `ready: true`
+still runs step 1, which queries GitHub and decides; `not_checked` names what the
+report does not claim. The report is **read-only** (no lock, no write, no GitHub
+call). Run it as written, not under `python3 -I`.
+
+Step 0's `python3 scripts/workflow_backlog.py preflight-accept <work-item-id>`
+runs **first**, before the completion command below: the flag does not run it, and
+`ready: true` does not stand in for it (the report names it in `not_checked`). A
+refusal there is the stop that stores nothing; completing first would complete the
+item before `workflow_backlog.py accept` could refuse at `/accept-milestone` step 3.
+Then, once step 0 passed, complete with one plain command (workflow-2.27.0):
+
+```
+python3 scripts/workflow_state.py --satisfy-acceptance <work-item-id>
+```
+
+It makes `/accept-milestone` step 2a's phase and registry check first (the library
+does not; the same code the report uses for `work_item_terminal`,
+`registry_unresolvable` and `phase_not_reachable`), then runs steps 1 to 3's one
+transaction (`workflow_state.satisfy_acceptance_gate`: the query, the trust
+record and the order unchanged) in one process, and prints exactly `{"record",
+"trailer"}` with exit 0; `trailer` is the value for step 4's
+`Workflow-Gate-Satisfied-By`. A refusal exits 1 with one object `{"error",
+"message", "state_changed"}` (plus `"code"` when the exception has one:
+`forge_unavailable`, `forge_undecidable`, `phase_not_reachable`, ...). With
+`state_changed: false` stop and write nothing. With `state_changed: true` and
+`GateNotSatisfiableError`, only the pull-request fact the query read (and a possible
+reopening, named in the message) was stored, as step 2 says. Any other
+`state_changed: true` means another writer changed the state: stop and re-read it. A refusal is never
+worked around by hand-writing the completion. The command does not commit, does
+not edit documents, does not write the findings record and does not record the
+floor: steps 4 and 5 below stay the worker's own edits, `git commit` and the two
+Python calls (the findings record and the floor) until their own plain commands
+exist. Run it as written, not under `python3 -I`. The Python descriptions in this
+section stay the specification.
+
 0. **Backlog pre-flight, before the first step** (workflow-2.17.0, `D-Accept`).
    Step 1 below stores the pull-request fact, so run `python3
    scripts/workflow_backlog.py preflight-accept <work-item-id>` first (it
