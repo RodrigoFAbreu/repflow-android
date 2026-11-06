@@ -26,7 +26,45 @@ The set correction sheet also edits RPE, technique and pain. Plan: `docs/milesto
 
   Known limits. No automated test takes a corrected value through Room: the JVM tests use the in-memory repositories, and `WorkoutEntityMapper` is the path logging also uses. CP1's look stored `9.0`, `2` and `4` in the real database. The four things seen and left under CP1 stand, and only `Techniqu/e` at font scale 2.0 needs the follow-up issue, at acceptance. The functional review's checklist has to carry the plan's known limitations, the flick that closes a scrolled sheet, and that no suggestion reads a set's pain.
 
-**Next action:** the local implementation review, `/review-implementation set-edit-fields`.
+**Next action:** perform the functional review below, write findings to `.ai-review/set-edit-fields/feedback/FUNCTIONAL_REVIEW.md`, or run `/accept-milestone` if testing is clean.
+
+### Functional review checklist
+
+Automated verification is current: production code last changed in `e9a199a` (CP1); `2bae391` and `bba7128` are tests only, and later commits are workflow records. The last full run on `bba7128`: `spotlessCheck`, `detekt`, `lintDebug` (0 errors), 908 JVM tests, 617 instrumented tests on `emulator-5554`, 0 failures.
+
+**Setup.** Use the AVD (`start-avd.sh`, 3 GB cap), not the phone. Fresh install with `./gradlew installDebug`. No feature flags, no network. Font scale is changed in the AVD's Settings > Display; restore it to 1.0 afterwards, and leave the theme light and auto-rotate on.
+
+**Test data.** An exercise `Bench` with weight and reps, made through the app. Start a workout and log two sets. Log the first at RPE 7, pain 1, technique 3, and leave the last one for each flow below. A second exercise is not needed. For F7 a warm-up set is needed: log one marked as warm-up.
+
+**F1 - The sheet reads as the board (R1).** Log a working set, then open the correction sheet on it. Expected: title `Correct this set`, subtitle `Set 2 · Bench`, the weight and reps steppers, then `Effort (RPE)`, `Pain` and `Technique` rows, all open, and `Optional. Tap a chosen number again to clear it.`; `Cancel` and `Save` at the foot. On a warm-up set the subtitle is `Warm-up set · Bench`, and it stays a warm-up after `Save`.
+
+**F2 - The set's own values are filled in (R1).** A set logged at RPE 7, pain 1, technique 3 opens the sheet with the cells 7, 1 and 3 chosen. A set logged with none of them opens with no cell chosen.
+
+**F3 - Save stores the changes (R2).** Tap RPE 9, pain 2, technique 4, then `Save`. Expected: the set row reads `RPE: 9.0 · Pain during set: 2/5 · Technique quality: 4/5`; reopening the sheet shows 9, 2 and 4 chosen. With the app stopped, `sqlite3` on the database shows `9.0`, `2`, `4`, the same `created_at` and a later `updated_at`.
+
+**F4 - Clear and Cancel (R2).** Tap the chosen pain cell: it clears, the other two stay, and `Save` stores `NULL` for pain only. Tapping RPE and technique cells again clears them too. Change cells and tap `Cancel`: nothing changes in the set row or the database.
+
+**F5 - A tapped value survives a restore (R2).** With the sheet open and cells tapped but not saved, rotate to landscape and back: the tapped cells stay chosen, and `Save` stores them.
+
+**F6 - A half RPE (R2).** With the app stopped, set a set's RPE to `7.5` with `sqlite3`. Expected: the sheet chooses no RPE cell, and the row says `RPE: 7.5`. `Save` with nothing touched keeps `7.5`. Tapping 8 then `Save` stores `8.0`. This is intended, not a bug.
+
+**F7 - Extra set fields at Off (R1).** Settings > `Extra set fields` > `Off`: the logging screen shows no RPE, pain or technique rows, but the correction sheet still does, and `0` on pain or technique saved from there is stored.
+
+**F8 - Look (R4).** Light and dark at font 1.0, then 1.3 and 2.0: the sheet matches `20i`, `Cancel` and `Save` are stacked (`Cancel` on top) above font scale 1.1 and each at least 48 dp, and everything is reached by scrolling, `Save` pressable at the foot. Landscape in both themes: it scrolls and `Save` is reachable. The logging screen's own rows and hint look as before.
+
+**F9 - A corrected RPE changes the next suggestion (R3).** With a plan range of 8-12 reps and two sets of 12 reps at RPE 7, completing the workout stores `IncreaseLoad` for the next one. Correct the last set to RPE 10 first and it stores `MaintainLoad`. Covered by `CorrectedSetRecommendationTest`; a quick look in the real app is optional.
+
+**Known limitations / out of scope.**
+- Pain doesn't change a suggestion: no suggestion reads a set's pain, logged or corrected. Only the recovery check-in's `Pain while walking` counts. Making set pain count is a separate item.
+- Only the last set can be corrected (`set-edit-any-set`). The warm-up flag, the timed-set clock and the `Extra set fields` setting are unchanged.
+- The rows show on the sheet with `Extra set fields` at `Off`, as `20i` draws it.
+- Dismissing the sheet saves nothing. A scrolled sheet can be flicked shut by `ModalBottomSheet`'s own dismissal, which drops unsaved taps; the stored set doesn't change. At font 2.0 a hard flick (about 1200 px in 120 ms) or a slow drag from the top closes it.
+- At font scale 2.0 `Technique` breaks mid-word as `Techniqu/e`; the logging screen does the same (`RepFlowScaleRow`, shared with Recovery). It goes on a follow-up issue.
+- In light a chosen cell shows a ring and almost no fill, where dark shows the tint. That is the shared pill colour, owned by `theme-text-levels`.
+- The stepper cards are the app's own: `Weight` with `kg · 2.5 steps` and a 10 dp gap, where the board draws `Weight (kg)` and 8.
+- The set row text `RPE: 8.0 · Pain during set: 1/5 · Technique quality: 4/5` is shared with logged sets and is unchanged.
+- No automated test takes a corrected value through Room; CP1's look in the real app did.
+- The full wrap-up runs are recorded above; acceptance doesn't repeat them.
 
 ## `timed-entry-mmss` — complete (accepted by policy 2026-11-06)
 
