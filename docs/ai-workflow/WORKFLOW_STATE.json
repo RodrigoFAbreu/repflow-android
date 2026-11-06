@@ -11673,7 +11673,7 @@
       "registry_path": "docs/ai-workflow/registry/backup-reminder-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/backup-reminder-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -11782,7 +11782,312 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+        "approved_review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+        "review_content_manifest": [
+          {
+            "path": "app/schemas/com.repflow.app.infrastructure.database.RepFlowDatabase/10.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c65da201be2a6fa8cd70f02c0fe967895b903f68"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepositoryTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "85b1909b026a6ae8629861e279e5346a0d7f90c8"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/data/settings/SettingsPersistenceTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bf3b81b278e74d67c5ef86392340b51568d3d9e6"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/infrastructure/database/RepFlowDatabaseMigrationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7e55503ee6b9db272410bfe44a5af3b80452a2d6"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/MainActivityNavHostSmokeTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1ce8eea52f203e1f010f2cede57179fa93a9f40e"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/HomeRouteLifecycleTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "24dd234a3f26c61aa9f1827fe922c5b21b7ce560"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/home/HomeScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "677b2182e4a3b276ed4031fb6f35d5abc0bbac8a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/settings/SettingsScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "292b151171e72b7de5b662a557e0b16a484713db"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutLeaveRouteTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e67c4f0ea528983337167cd03bbe52e8f9fcc1de"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/backup/TrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d75efd173cf9761de9da108a9c4e87e814d3c7ee"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/history/ObserveRecentTraining.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9fb63de092f0817e4adbeffc3436cd574d054801"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/application/settings/AppSettings.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a9b09bb6e82b52f460f645c4a326e5fee2370c96"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/backup/LocalTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "118cd574c78f769bd7222654eec76d549f044ac5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/data/settings/LocalSettingsRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f06b42a818cf11785194e796dfb10ac596b24dab"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/RepFlowDatabase.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "11d6e999a4ba7333c91408c6964e188dfcb7aff3"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/RepFlowMigrations.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b2f5216d593612b57d1b6348eb088ebd99ba8257"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/TrainingDataDao.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8e242ac861e6509c299aec38a92dbd9bff584c2d"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/infrastructure/database/settings/SettingsEntity.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1d649dc1b3a9178ac9884b9383e6c1fef63cdf7a"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIcons.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "9e747b91fc308c4fbba30a013d565336b0c51cb1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeBackupReminder.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "de1dbda37b775ece0178638f08abb28dc9603b58"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeCards.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8cec72f570cbdd979119639c4a7236a081657f32"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeRoute.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5826730ebbd96849fe3547e5a4b012d649dbcdb8"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "b8e72ea71e361e2278049f6230bde85a4ecbd347"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeUiState.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a6d4a1a0d4f1b32358d6df5fc85ea2afc9f7ec80"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/home/HomeViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8a7cb8067b41839b90c93b5eb2cf4573ba45a8d0"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowDestinations.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "f4c97cdafb81f92c978bb4fcbc7a2cee71e2bd9f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/navigation/RepFlowNavHost.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "5c1c9298e17d0e1453e80d17cb8f2691af48e83e"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3ad281259b4bd82c2b1804295b80c42bbcd85a6f"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsViewModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "843de6269c6c08e236c2bca5f724e4fb52bfab1c"
+          },
+          {
+            "path": "app/src/main/res/drawable/ic_ph_floppy_disk.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a6817a5cea18c5a0e027a64733de6c0a6a12b59d"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "94c6d73e9e27fce92583279d3171dbe35b08df0f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/backup/InMemoryTrainingDataRepository.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "876917004aa18b33f582668c9110752a650f284f"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/application/history/ObserveRecentTrainingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3b21c42c6992e48a879230b16dc17fbc1ff1338a"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/icons/RepFlowIconsTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ade2aca1e8c267c456aaceeb68cd7ed150ddf104"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeBackupReminderTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "491370ac9d13600e0157dabfe6cdb972803f9f80"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/home/HomeViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7b042e018c23e131b93d4f0ec5643276b8bddc70"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/settings/SettingsViewModelTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "0bb43bade75811bfe3f12116f9f5009277f6429c"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8ccdd63e34316b96b85e0c6e53e60ccb018081a5"
+          },
+          {
+            "path": "docs/ai-workflow/registry/backup-reminder-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "53b7d4508f39e4dcb3cb22306d6e2d7ea79b3e86"
+          }
+        ],
+        "reviewed_content_commit": "593457162f18136e17a3a1795d8bdf48625219a7",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T03:31:00Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+            "ledger": {
+              "local": {
+                "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "c6a7775dcc6cd0655cf195288e96be2ec7c65db62e5556944b897d6ccdb16319",
+                "ledger_entry_sha256": "8fe0d2bc0098a1191e030452fd25e687d494ed896d42f75783035e1de5fc08d4",
+                "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "c56099747228d89ff68e2e39348a1ea02929cf05711f6b2886b44df06f94540a",
+                "ledger_entry_sha256": "907ce4c40c6f9aecd24e5bf1468629acd71a30dd203df96e7c834d365cea5859",
+                "run_ref": "codex:20261106T032753Z-34ce3007",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T03:31:00Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "e0270ab6b8fc114e0e5f88b13eb1510bdce2cf0fbdf5f14c92f46af238262cdc",
@@ -11813,12 +12118,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 1,
-          "external": 1
+          "local": 2,
+          "external": 2
         }
       },
-      "state_revision": 17,
-      "last_transition": "2026-11-06T02:56:26Z",
+      "state_revision": 20,
+      "last_transition": "2026-11-06T03:31:00Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -12023,20 +12328,42 @@
               "at": "2026-11-06T02:21:29Z"
             }
           ]
+        },
+        "F-659ab0015dc8": {
+          "digest": "659ab0015dc84b9ef047466700b2f2c8350429971f19d6da3d2a3ca60eb17e19",
+          "text": "**O1. A double tap on `Back up` opens Backup twice, so Back has to be pressed twice.** `RepFlowNavHost` calls `navigate(BACKUP)` from Home with no `launchSingleTop`. On the AVD, two taps sent within about 50 ms left two Backup entries, and the first Back stayed on Backup, where R4 says Back returns Home. This wasn't tried at a person's speed. The gear did the same in a control run, and Settings' own Backup row makes the same call, so this is the app's existing pattern and this item adds one more way in. From reading the code, not run: both Backup ViewModels collect a restore's outcome, so the lower screen could repeat the snackbar after Back; nothing is lost. `launchSingleTop = true` on Home's call would fix this entry. A wider fix belongs in its own item.",
+          "raised": [
+            {
+              "stage": "implementation",
+              "role": "LOCAL_MODEL_IMPLEMENTATION_REVIEW",
+              "round": 2,
+              "review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T03:27:15Z"
+            }
+          ]
         }
       },
       "implementation_review_stages": {
-        "review_content_id": "77362c7a7897bb52d24a4aa73a1fca06f51e1ce0350eaeb831525cf8b9a3fc50",
+        "review_content_id": "a0553d9d7bdb69b1a92b4ba154602400e4aecc1b0cb2909537bd22fe0dadd6b9",
         "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
-          "bundle_id": "bde107fbfa4556dfda93f36e06851ba07be117ef7610e22c7ca48b8d8312b49a",
+          "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
           "verdict": "APPROVE",
-          "round": 1,
-          "completed_at": "2026-11-06T02:21:29Z",
-          "verdict_sha256": "389dc4b255dc52f03e63a665045cf5994cd65d48b45289f92ff722c73d97acc1",
+          "round": 2,
+          "completed_at": "2026-11-06T03:27:15Z",
+          "verdict_sha256": "c6a7775dcc6cd0655cf195288e96be2ec7c65db62e5556944b897d6ccdb16319",
           "run_ref": "session:local .ai-review/backup-reminder/feedback/REVIEW_FEEDBACK.md",
           "reviewer_model": "anthropic/claude-opus-5-5"
         },
-        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": null
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "4e5217480bf82bf76c45cb9fd94446da56d0b70d32d87db9589359b1206b4f0f",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T03:30:14Z",
+          "verdict_sha256": "c56099747228d89ff68e2e39348a1ea02929cf05711f6b2886b44df06f94540a",
+          "run_ref": "codex:20261106T032753Z-34ce3007",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
       }
     }
   },
