@@ -336,6 +336,10 @@ internal class FocusEntries(
  * or a `Column` by width would give each its own saved state, so a phone that
  * crosses the width as it rotates would lose an open pad's entry and bring it
  * back later, out of date.
+ *
+ * [filledFromClock] picks the Time card's hint. The clock itself is
+ * `TimedSetClockCard`, drawn by focus mode, because the correction sheet draws these
+ * cards too and `20i` has no clock.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -349,8 +353,8 @@ internal fun EntrySteppers(
     onSecondsChange: (BigDecimal) -> Unit,
     loadStep: BigDecimal,
     repRange: IntRange?,
-    durationRange: LongRange?,
     modifier: Modifier = Modifier,
+    filledFromClock: Boolean = false,
 ) {
     val cardGap = RepFlowSpacing.gapMd
     Layout(
@@ -359,7 +363,7 @@ internal fun EntrySteppers(
                 WeightCard(load, onLoadChange, loadStep)
             }
             if (trackingType == ExerciseTrackingType.DURATION) {
-                SecondsCard(seconds, onSecondsChange, durationRange)
+                SecondsCard(seconds, onSecondsChange, filledFromClock)
             } else {
                 RepsCard(reps, onRepsChange, repRange)
             }
@@ -451,20 +455,18 @@ private fun RepsCard(
 private fun SecondsCard(
     seconds: BigDecimal?,
     onSecondsChange: (BigDecimal) -> Unit,
-    durationRange: LongRange?,
+    filledFromClock: Boolean,
 ) {
     val label = stringResource(R.string.workout_active_duration_label)
     StepperCard(
         label = label,
-        caption =
-            durationRange?.let {
-                stringResource(
-                    R.string.workout_focus_seconds_target,
-                    formatDuration(it.first),
-                    formatDuration(it.last),
-                )
+        caption = null,
+        hint =
+            if (filledFromClock) {
+                stringResource(R.string.workout_focus_time_hint_from_clock)
+            } else {
+                stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong()))
             },
-        hint = stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong())),
     ) {
         RepFlowStepper(
             value = seconds,

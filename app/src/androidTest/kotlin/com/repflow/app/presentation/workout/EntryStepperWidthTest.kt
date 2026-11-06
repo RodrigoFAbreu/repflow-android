@@ -78,7 +78,6 @@ class EntryStepperWidthTest {
                         onSecondsChange = {},
                         loadStep = BigDecimal("2.5"),
                         repRange = null,
-                        durationRange = null,
                     )
                 }
             }

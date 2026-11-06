@@ -6,6 +6,7 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.State
@@ -13,20 +14,31 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.assertWidthIsEqualTo
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.isSelected
@@ -37,6 +49,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -49,6 +62,7 @@ import androidx.compose.ui.unit.width
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.repflow.app.R
 import com.repflow.app.application.settings.ExtraSetFields
+import com.repflow.app.application.settings.ThemeMode
 import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
@@ -57,7 +71,10 @@ import com.repflow.app.domain.workout.WorkoutSessionId
 import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.assertButtonLabelWhole
+import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.components.formatDuration
+import com.repflow.app.presentation.designsystem.components.repFlowAccentOutlineColors
+import com.repflow.app.presentation.designsystem.components.repFlowSelectedPillColors
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.ProgressionResultUi
 import org.junit.Assert.assertEquals
@@ -835,7 +852,7 @@ class ActiveWorkoutScreenTest {
     }
 
     @Test
-    fun theTimeCardsHintSitsBelowItsTargetLine() {
+    fun theTimeCardHasNoTargetOfItsOwnAndItsHintSitsBelowTheClocksLine() {
         setContent(
             exercise(
                 ExerciseTrackingType.DURATION,
@@ -854,15 +871,16 @@ class ActiveWorkoutScreenTest {
                 .onNodeWithText("Steps of 0:05. Tap the value to type m:ss.")
                 .performScrollTo()
                 .getUnclippedBoundsInRoot()
-        val target = composeRule.onNode(hasText("target ", substring = true)).getUnclippedBoundsInRoot()
+        val target = composeRule.onNodeWithText("Target 0:30–1:00").getUnclippedBoundsInRoot()
 
         assertTrue("the hint is under the target line", hint.top >= target.bottom)
+        composeRule.onNode(hasText("target ", substring = true)).assertDoesNotExist()
     }
 
     // ---- Timed values read as m:ss (timed-entry-mmss CP3) ----
 
     @Test
-    fun theTimeCardsTargetReadsAsClocks() {
+    fun theClocksTargetLineReadsAsClocks() {
         setContent(
             exercise(
                 ExerciseTrackingType.DURATION,
@@ -871,7 +889,7 @@ class ActiveWorkoutScreenTest {
         )
 
         composeRule
-            .onNodeWithText(composeRule.activity.getString(R.string.workout_focus_seconds_target, "0:45", "1:30"))
+            .onNodeWithText(composeRule.activity.getString(R.string.workout_focus_clock_target_range, "0:45", "1:30"))
             .performScrollTo()
             .assertIsDisplayed()
     }
@@ -1348,34 +1366,59 @@ class ActiveWorkoutScreenTest {
      * it: the sheet's window keeps its values in a registry of its own, saved only when the activity is, so
      * under the tester they are simply lost.
      */
+    @Suppress("LongParameterList")
     private fun setFocus(
         exercise: () -> ActiveExerciseUi,
         onEdited: (List<Any?>) -> Unit = {},
+        prepareEntry: SetEntryState.() -> Unit = {},
+        nowMillis: () -> Long = System::currentTimeMillis,
+        onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit =
+            { _, _, _, _, _, _, _, _, _ -> },
+        themeMode: ThemeMode = ThemeMode.SYSTEM,
+        fontScale: Float? = null,
     ) {
         composeRule.activityRule.scenario.onActivity { activity ->
             activity.setContent {
-                RepFlowTheme {
-                    val current = exercise()
-                    WorkoutFocus(
-                        content =
-                            ActiveWorkoutContent.Active(
-                                sessionId = WorkoutSessionId("session-1"),
-                                startedAt = Instant.parse("2026-01-01T00:00:00Z"),
-                                exercises = listOf(current),
-                            ),
-                        exercise = current,
-                        entry = rememberSaveable(saver = SetEntryState.Saver) { SetEntryState().also { it.applySeed(current.seed) } },
-                        recommendation = null,
-                        onBackToBoard = {},
-                        onFinishClick = {},
-                        onNextExercise = {},
-                        onOpenRecommendation = {},
-                        onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
-                        onUndoLastSet = {},
-                        onEditSet = recordingEdits(onEdited),
-                        restStrip = {},
-                        snackbarHostState = remember { SnackbarHostState() },
-                    )
+                RepFlowTheme(themeMode = themeMode) {
+                    val scheme = MaterialTheme.colorScheme
+                    clockColors =
+                        ClockColors(
+                            hairlineEdge = RepFlowColor.hairline,
+                            accentEdge = repFlowSelectedPillColors(scheme).border,
+                            plainTime = scheme.onSurface,
+                            accentTime = repFlowAccentOutlineColors(scheme).label,
+                        )
+                    val base = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale ?: base.fontScale)) {
+                        val current = exercise()
+                        WorkoutFocus(
+                            content =
+                                ActiveWorkoutContent.Active(
+                                    sessionId = WorkoutSessionId("session-1"),
+                                    startedAt = Instant.parse("2026-01-01T00:00:00Z"),
+                                    exercises = listOf(current),
+                                ),
+                            exercise = current,
+                            entry =
+                                rememberSaveable(saver = SetEntryState.Saver) {
+                                    SetEntryState().also {
+                                        it.applySeed(current.seed)
+                                        it.prepareEntry()
+                                    }
+                                },
+                            recommendation = null,
+                            onBackToBoard = {},
+                            onFinishClick = {},
+                            onNextExercise = {},
+                            onOpenRecommendation = {},
+                            onRecordSet = onRecordSet,
+                            onUndoLastSet = {},
+                            onEditSet = recordingEdits(onEdited),
+                            restStrip = {},
+                            snackbarHostState = remember { SnackbarHostState() },
+                            nowMillis = nowMillis,
+                        )
+                    }
                 }
             }
         }
@@ -1954,6 +1997,576 @@ class ActiveWorkoutScreenTest {
         val control = composeRule.onNode(hasClickAction() and hasText(string(label))).getUnclippedBoundsInRoot()
         assertTrue("message $message overlaps ${string(label)} $control", message.bottom <= control.top)
     }
+
+    // ---- The set clock (timed-set-clock CP2, `20o`, `20p`) ----
+
+    private lateinit var clockColors: ClockColors
+
+    private fun timedExercise(
+        target: LongRange? = FIXED_TARGET,
+        sets: List<ActiveSetUi> = emptyList(),
+    ) = exercise(
+        ExerciseTrackingType.DURATION,
+        sets = sets,
+        plannedTarget = target?.let { PlannedTargetUi(targetWarmupSets = null, targetWorkingSets = 3, durationRangeSeconds = it) },
+    )
+
+    private fun format(
+        @StringRes id: Int,
+        vararg args: Any,
+    ) = composeRule.activity.getString(id, *args)
+
+    private fun stoppedAt(time: String) = format(R.string.workout_focus_clock_stopped_at, time)
+
+    private fun countingUp(target: String) = format(R.string.workout_focus_clock_counting_up, target)
+
+    private fun readout() = composeRule.onNodeWithTag(TIMED_SET_CLOCK_READOUT_TAG)
+
+    /** The readout is on the real clock, so what is asserted about it is a bound. */
+    private fun readoutSeconds(): Long {
+        val (minutes, seconds) =
+            readout()
+                .fetchSemanticsNode()
+                .config[SemanticsProperties.Text]
+                .single()
+                .text
+                .split(":")
+        return minutes.toLong() * SECONDS_PER_MINUTE + seconds.toLong()
+    }
+
+    /** The Time card's value, which the readout, having no click action, can't be mistaken for. */
+    private fun timeStepper(value: String) = composeRule.onNode(hasText(value) and hasClickAction())
+
+    private fun normalTimeHint() = composeRule.onNodeWithText(format(R.string.workout_focus_time_hint, "0:05"))
+
+    private fun assertNoStoppedLine() = composeRule.onNode(hasText("Stopped at", substring = true)).assertDoesNotExist()
+
+    private class LoggedSet(
+        val seconds: Int?,
+        val onSaved: () -> Unit,
+    )
+
+    private fun recordingSets(
+        onSet: (LoggedSet) -> Unit,
+    ): (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit =
+        { _, _, _, seconds, _, _, _, _, onSaved -> onSet(LoggedSet(seconds, onSaved)) }
+
+    /** A clock started 90 s before the held tap, then `Stop`; [onSet] gets what `Log set` reports. */
+    private fun stopAClockAt90Seconds(onSet: (LoggedSet) -> Unit = {}) {
+        val tap = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus(
+            { exercise },
+            prepareEntry = { startClock(tap - NINETY_SECONDS_MILLIS) },
+            nowMillis = { tap },
+            onRecordSet = recordingSets(onSet),
+        )
+        node(R.string.workout_focus_clock_stop).performScrollTo().performClick()
+    }
+
+    @Test
+    fun aFixedTargetShowsTheClockAboveTheTimeCard() {
+        val exercise = timedExercise()
+        setFocus({ exercise })
+
+        node(R.string.workout_focus_clock_label).performScrollTo().assertIsDisplayed()
+        readout().assert(hasText("0:00")).assertIsDisplayed()
+        composeRule.onNodeWithText("Target 1:00").assertIsDisplayed()
+        node(R.string.workout_focus_clock_start).assertIsDisplayed()
+        val card = composeRule.onNodeWithTag(TIMED_SET_CLOCK_CARD_TAG).getUnclippedBoundsInRoot()
+        val timeLabel = node(R.string.workout_active_duration_label).getUnclippedBoundsInRoot()
+        assertTrue("the clock $card is above the Time card's label $timeLabel", card.bottom <= timeLabel.top)
+    }
+
+    @Test
+    fun aRangeShowsItsTargetAndNeverMentionsAnAlert() {
+        val exercise = timedExercise(RANGE_TARGET)
+        setFocus({ exercise })
+
+        composeRule.onNodeWithText("Target 0:30–0:45").performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasText("alerts at", substring = true)).assertDoesNotExist()
+
+        node(R.string.workout_focus_clock_start).performClick()
+
+        composeRule.onNodeWithText(countingUp("Target 0:30–0:45")).assertIsDisplayed()
+        composeRule.onNode(hasText("alerts at", substring = true)).assertDoesNotExist()
+    }
+
+    @Test
+    fun withNoTargetTheClockHasNoLine() {
+        val exercise = timedExercise(target = null)
+        setFocus({ exercise })
+
+        readout().performScrollTo().assert(hasText("0:00"))
+        node(R.string.workout_focus_clock_start).assertIsDisplayed()
+        composeRule.onNode(hasText("Target", substring = true)).assertDoesNotExist()
+
+        node(R.string.workout_focus_clock_start).performClick()
+
+        node(R.string.workout_focus_clock_stop).assertIsDisplayed()
+        composeRule.onNode(hasText("Target", substring = true)).assertDoesNotExist()
+    }
+
+    @Test
+    fun aWeightAndRepsExerciseHasNoClock() = assertNoClockOn(ExerciseTrackingType.WEIGHT_AND_REPS)
+
+    @Test
+    fun aRepsOnlyExerciseHasNoClock() = assertNoClockOn(ExerciseTrackingType.REPS_ONLY)
+
+    private fun assertNoClockOn(trackingType: ExerciseTrackingType) {
+        val exercise = exercise(trackingType)
+        setFocus({ exercise })
+
+        node(R.string.workout_focus_clock_label).assertDoesNotExist()
+        node(R.string.workout_focus_clock_start).assertDoesNotExist()
+        composeRule.onNodeWithTag(TIMED_SET_CLOCK_CARD_TAG).assertDoesNotExist()
+    }
+
+    @Test
+    fun startCountsUpHoldsBackLogSetAndLeavesTheStepperWorking() {
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { enterSeconds(BigDecimal(30)) })
+        node(R.string.workout_focus_log_set).assertIsEnabled()
+
+        node(R.string.workout_focus_clock_start).performScrollTo().performClick()
+
+        node(R.string.workout_focus_clock_stop).assertIsDisplayed()
+        node(R.string.workout_focus_clock_start).assertDoesNotExist()
+        assertTrue("the readout has only just started", readoutSeconds() < SECONDS_PER_MINUTE)
+        composeRule.onNodeWithText(countingUp("Target 1:00")).assertIsDisplayed()
+        node(R.string.workout_focus_log_set).assertIsNotEnabled()
+
+        composeRule.onNodeWithContentDescription(string(R.string.workout_focus_more_seconds)).performScrollTo().performClick()
+
+        timeStepper("0:35").assertIsDisplayed()
+        node(R.string.workout_focus_log_set).assertIsNotEnabled()
+    }
+
+    @Test
+    fun pastAFixedTargetTheLineSaysReachedAndItKeepsCounting() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - SIXTY_SEVEN_SECONDS_MILLIS) })
+
+        composeRule.onNodeWithText("Target 1:00 reached · still counting").performScrollTo().assertIsDisplayed()
+        assertTrue("the readout is at least 1:07", readoutSeconds() >= SIXTY_SEVEN_SECONDS)
+        node(R.string.workout_focus_clock_stop).assertIsDisplayed()
+    }
+
+    /** The first composition comes well inside a second of this start moment, so this is the target's own second. */
+    @Test
+    fun theCardChangesAtExactlyTheTarget() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - SIXTY_SECONDS_MILLIS) })
+
+        composeRule.onNodeWithText("Target 1:00 reached · still counting").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun pastTheBottomOfARangeTheLineSaysPassedWhileItIsStillInsideTheRange() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise(RANGE_TARGET)
+        setFocus({ exercise }, prepareEntry = { startClock(now - THIRTY_EIGHT_SECONDS_MILLIS) })
+
+        composeRule.onNodeWithText("Passed 0:30 · still counting").performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_clock_stop).assertIsDisplayed()
+    }
+
+    @Test
+    fun underTheTargetTheLineIsCountingUp() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - TWENTY_SECONDS_MILLIS) })
+
+        composeRule.onNodeWithText(countingUp("Target 1:00")).performScrollTo().assertIsDisplayed()
+        composeRule.onNode(hasText("still counting", substring = true)).assertDoesNotExist()
+    }
+
+    @Test
+    fun pastTheTargetTheCardHasTheAccentEdgeAndTheTimeInDark() = assertPastTheTargetLook(ThemeMode.DARK)
+
+    @Test
+    fun pastTheTargetTheCardHasTheAccentEdgeAndTheTimeInLight() = assertPastTheTargetLook(ThemeMode.LIGHT)
+
+    @Test
+    fun underTheTargetTheCardKeepsItsHairlineAndPlainTimeInDark() = assertUnderTheTargetLook(ThemeMode.DARK)
+
+    @Test
+    fun underTheTargetTheCardKeepsItsHairlineAndPlainTimeInLight() = assertUnderTheTargetLook(ThemeMode.LIGHT)
+
+    private fun assertPastTheTargetLook(themeMode: ThemeMode) {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - SIXTY_SEVEN_SECONDS_MILLIS) }, themeMode = themeMode)
+
+        assertColorsMatch("the card's top edge", clockColors.accentEdge, cardTopEdge())
+        assertEquals(clockColors.accentTime, readoutColor())
+    }
+
+    private fun assertUnderTheTargetLook(themeMode: ThemeMode) {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - TWENTY_SECONDS_MILLIS) }, themeMode = themeMode)
+
+        assertColorsMatch("the card's top edge", clockColors.hairlineEdge, cardTopEdge())
+        assertEquals(clockColors.plainTime, readoutColor())
+    }
+
+    /** Inside the border's own pixels: `Modifier.border` rounds its stroke up to whole pixels. */
+    private fun cardTopEdge(): Color {
+        val image =
+            composeRule
+                .onNodeWithTag(TIMED_SET_CLOCK_CARD_TAG)
+                .performScrollTo()
+                .captureToImage()
+                .toPixelMap()
+        return image[image.width / 2, 1]
+    }
+
+    private fun readoutColor(): Color =
+        readout()
+            .textLayout()
+            .layoutInput.style.color
+
+    private fun SemanticsNodeInteraction.textLayout(): TextLayoutResult {
+        val results = mutableListOf<TextLayoutResult>()
+        fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+        return results.single()
+    }
+
+    private fun assertColorsMatch(
+        what: String,
+        expected: Color,
+        actual: Color,
+    ) {
+        val close =
+            listOf(expected.red - actual.red, expected.green - actual.green, expected.blue - actual.blue)
+                .all { kotlin.math.abs(it) < COLOR_TOLERANCE }
+        assertTrue("$what is $actual, not $expected", close)
+    }
+
+    @Test
+    fun aStartMomentInTheFutureReadsZeroAndNoTextOnTheCardHoldsAMinusSign() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now + ONE_HOUR_MILLIS) })
+
+        readout().performScrollTo().assert(hasText("0:00"))
+        composeRule
+            .onAllNodes(
+                hasAnyAncestor(hasTestTag(TIMED_SET_CLOCK_CARD_TAG)) and
+                    (hasText("-", substring = true) or hasText("−", substring = true)),
+            ).assertCountEquals(0)
+    }
+
+    @Test
+    fun stopFillsTheTimeInWithoutLoggingAndLogSetReportsExactlyThatTime() {
+        val logged = mutableListOf<LoggedSet>()
+        stopAClockAt90Seconds { logged += it }
+
+        timeStepper("1:30").assertIsDisplayed()
+        readout().assert(hasText("1:30"))
+        composeRule.onNodeWithText(stoppedAt("1:30")).assertIsDisplayed()
+        node(R.string.workout_focus_clock_start_again).assertIsDisplayed()
+        node(R.string.workout_focus_clock_stop).assertDoesNotExist()
+        node(R.string.workout_focus_clock_start).assertDoesNotExist()
+        node(R.string.workout_focus_time_hint_from_clock).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_log_set).assertIsEnabled()
+        assertTrue("stopping logs nothing", logged.isEmpty())
+
+        node(R.string.workout_focus_log_set).performClick()
+
+        assertEquals(listOf<Int?>(90), logged.map { it.seconds })
+    }
+
+    @Test
+    fun onceTheSetHasSavedTheClockIsBackAtZeroAndTheTimeStays() {
+        var logged: LoggedSet? = null
+        stopAClockAt90Seconds { logged = it }
+
+        node(R.string.workout_focus_log_set).performClick()
+        composeRule.runOnIdle { logged!!.onSaved() }
+
+        readout().assert(hasText("0:00"))
+        node(R.string.workout_focus_clock_start).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_clock_start_again).assertDoesNotExist()
+        assertNoStoppedLine()
+        timeStepper("1:30").performScrollTo().assertIsDisplayed()
+        normalTimeHint().performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aFailedSaveKeepsTheStoppedClock() {
+        val logged = mutableListOf<LoggedSet>()
+        stopAClockAt90Seconds { logged += it }
+
+        node(R.string.workout_focus_log_set).performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(1, logged.size)
+        composeRule.onNodeWithText(stoppedAt("1:30")).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_clock_start_again).assertIsDisplayed()
+        node(R.string.workout_focus_time_hint_from_clock).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aTimeTypedAfterStopIsTheOneLoggedAndStartAgainRefills() {
+        var tap = System.currentTimeMillis()
+        val logged = mutableListOf<LoggedSet>()
+        val exercise = timedExercise()
+        setFocus(
+            { exercise },
+            prepareEntry = { startClock(tap - NINETY_SECONDS_MILLIS) },
+            nowMillis = { tap },
+            onRecordSet = recordingSets { logged += it },
+        )
+        node(R.string.workout_focus_clock_stop).performScrollTo().performClick()
+
+        timeStepper("1:30").performScrollTo().performClick()
+        selectedPadValue("1:30").assertIsDisplayed()
+        pressKeys("1", "4", "0")
+        pressSet()
+
+        timeStepper("1:40").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(stoppedAt("1:30")).assertIsDisplayed()
+        normalTimeHint().performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_time_hint_from_clock).assertDoesNotExist()
+        node(R.string.workout_focus_log_set).performClick()
+        assertEquals(listOf<Int?>(100), logged.map { it.seconds })
+
+        tap = System.currentTimeMillis()
+        node(R.string.workout_focus_clock_start_again).performScrollTo().performClick()
+        assertTrue("the readout starts again from zero", readoutSeconds() < SECONDS_PER_MINUTE)
+        assertNoStoppedLine()
+
+        tap += FORTY_SECONDS_MILLIS
+        node(R.string.workout_focus_clock_stop).performClick()
+
+        timeStepper("0:40").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText(stoppedAt("0:40")).assertIsDisplayed()
+        node(R.string.workout_focus_time_hint_from_clock).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun withoutAStartThePadAndTheStepperWorkAsBefore() {
+        val logged = mutableListOf<LoggedSet>()
+        val exercise = timedExercise()
+        setFocus({ exercise }, onRecordSet = recordingSets { logged += it })
+        node(R.string.workout_focus_log_set).assertIsNotEnabled()
+
+        timeStepper(string(R.string.workout_focus_value_empty)).performScrollTo().performClick()
+        pressKeys("1", "3", "0")
+        pressSet()
+        timeStepper("1:30").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(string(R.string.workout_focus_more_seconds)).performClick()
+        timeStepper("1:35").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription(string(R.string.workout_focus_fewer_seconds)).performClick()
+        node(R.string.workout_focus_log_set).assertIsEnabled().performClick()
+
+        assertEquals(listOf<Int?>(90), logged.map { it.seconds })
+        readout().assert(hasText("0:00"))
+        node(R.string.workout_focus_clock_start).performScrollTo().assertIsDisplayed()
+        normalTimeHint().performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun aStopUnderASecondGoesBackToBeforeStartAndLeavesTheEntry() {
+        val tap = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus(
+            { exercise },
+            prepareEntry = {
+                enterSeconds(BigDecimal(30))
+                startClock(tap - JUST_UNDER_A_SECOND_MILLIS)
+            },
+            nowMillis = { tap },
+        )
+
+        node(R.string.workout_focus_clock_stop).performScrollTo().performClick()
+
+        readout().assert(hasText("0:00"))
+        node(R.string.workout_focus_clock_start).performScrollTo().assertIsDisplayed()
+        assertNoStoppedLine()
+        timeStepper("0:30").performScrollTo().assertIsDisplayed()
+        normalTimeHint().performScrollTo().assertIsDisplayed()
+    }
+
+    /** [recreateOnto] mounts with no prepared entry, so a clock can only come back through the saved state. */
+    @Test
+    fun aRunningClockSurvivesARecreatedActivity() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - NINETY_SECONDS_MILLIS) })
+
+        recreateOnto({ exercise })
+
+        node(R.string.workout_focus_clock_stop).performScrollTo().assertIsDisplayed()
+        assertTrue("the readout is at least 1:30", readoutSeconds() >= NINETY_SECONDS)
+    }
+
+    @Test
+    fun aStoppedClockSurvivesARecreatedActivity() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus(
+            { exercise },
+            prepareEntry = {
+                startClock(now - NINETY_SECONDS_MILLIS)
+                stopClock(now)
+            },
+        )
+
+        recreateOnto({ exercise })
+
+        composeRule.onNodeWithText(stoppedAt("1:30")).performScrollTo().assertIsDisplayed()
+        node(R.string.workout_focus_clock_start_again).assertIsDisplayed()
+        readout().assert(hasText("1:30"))
+    }
+
+    @Test
+    fun theStoppedClockIsInWordsForAScreenReaderAndTheTimeIsNotALiveRegion() {
+        stopAClockAt90Seconds()
+
+        readout()
+            .assert(hasContentDescription("1 minute 30 seconds"))
+            .assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.LiveRegion))
+        composeRule.onNodeWithText(stoppedAt("1:30")).assert(hasContentDescription(stoppedAt("1 minute 30 seconds")))
+    }
+
+    @Test
+    fun aRunningClocksLinesAreInWordsAndItsTimeIsNotALiveRegion() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, prepareEntry = { startClock(now - TWENTY_SECONDS_MILLIS) })
+
+        readout().assert(SemanticsMatcher.keyNotDefined(SemanticsProperties.LiveRegion))
+        composeRule
+            .onNodeWithText(countingUp("Target 1:00"))
+            .assert(hasContentDescription(countingUp("Target 1 minute")))
+    }
+
+    @Test
+    fun theClocksButtonsAreButtonsWithTheirLabels() {
+        var tap = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, nowMillis = { tap })
+        val isAButton = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Button)
+
+        node(R.string.workout_focus_clock_start).assert(isAButton).performScrollTo().performClick()
+        node(R.string.workout_focus_clock_stop).assert(isAButton)
+        tap += FORTY_SECONDS_MILLIS
+        node(R.string.workout_focus_clock_stop).performClick()
+        node(R.string.workout_focus_clock_start_again).assert(isAButton)
+    }
+
+    /** At font scale 1.0 the labels alone are shorter than these heights, so only the card's floors can hold them. */
+    @Test
+    fun theClocksButtonsKeepTheirHeightsAtFontScale1() {
+        var tap = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, nowMillis = { tap }, fontScale = 1f)
+
+        node(R.string.workout_focus_clock_start).performScrollTo().assertHeightIsAtLeast(CLOCK_MAIN_BUTTON_HEIGHT.dp).performClick()
+        node(R.string.workout_focus_clock_stop).assertHeightIsAtLeast(CLOCK_MAIN_BUTTON_HEIGHT.dp)
+        tap += NINETY_SECONDS_MILLIS
+        node(R.string.workout_focus_clock_stop).performClick()
+        node(R.string.workout_focus_clock_start_again).performScrollTo().assertHeightIsAtLeast(CLOCK_START_AGAIN_HEIGHT.dp)
+    }
+
+    @Test
+    fun everyClockStateFitsAtFontScale2InDark() = assertEveryClockStateFitsAtFontScale2(ThemeMode.DARK)
+
+    @Test
+    fun everyClockStateFitsAtFontScale2InLight() = assertEveryClockStateFitsAtFontScale2(ThemeMode.LIGHT)
+
+    private fun assertEveryClockStateFitsAtFontScale2(themeMode: ThemeMode) {
+        var tap = System.currentTimeMillis()
+        val exercise = timedExercise()
+        setFocus({ exercise }, nowMillis = { tap }, themeMode = themeMode, fontScale = LARGE_FONT_SCALE_MAX)
+        val context = "font $LARGE_FONT_SCALE_MAX, $themeMode"
+
+        node(R.string.workout_focus_clock_start).performScrollTo().assertHeightIsAtLeast(CLOCK_MAIN_BUTTON_HEIGHT.dp)
+        composeRule.assertButtonLabelWhole(string(R.string.workout_focus_clock_start), context)
+        assertWhole(node(R.string.workout_focus_clock_start))
+        assertTextWhole(composeRule.onNodeWithText("Target 1:00"))
+        assertTextWhole(readout())
+
+        node(R.string.workout_focus_clock_start).performClick()
+
+        node(R.string.workout_focus_clock_stop).performScrollTo().assertHeightIsAtLeast(CLOCK_MAIN_BUTTON_HEIGHT.dp)
+        composeRule.assertButtonLabelWhole(string(R.string.workout_focus_clock_stop), context)
+        assertWhole(node(R.string.workout_focus_clock_stop))
+        assertTextWhole(composeRule.onNodeWithText(countingUp("Target 1:00")))
+        assertTextWhole(readout())
+
+        tap += NINETY_SECONDS_MILLIS
+        node(R.string.workout_focus_clock_stop).performClick()
+
+        node(R.string.workout_focus_clock_start_again).performScrollTo().assertHeightIsAtLeast(CLOCK_START_AGAIN_HEIGHT.dp)
+        composeRule.assertButtonLabelWhole(string(R.string.workout_focus_clock_start_again), context)
+        assertWhole(node(R.string.workout_focus_clock_start_again))
+        assertTextWhole(composeRule.onNodeWithText(stoppedAt("1:30")))
+        assertTextWhole(readout())
+    }
+
+    /** Scrolled into view: neither the screen nor the scroll area cuts any of it off. */
+    private fun assertWhole(node: SemanticsNodeInteraction) {
+        node.performScrollTo()
+        val whole = node.getUnclippedBoundsInRoot()
+        val seen = node.getBoundsInRoot()
+        assertTrue("$whole is clipped to $seen", whole.height - seen.height < 1.dp && whole.width - seen.width < 1.dp)
+    }
+
+    /** As [assertWhole], and every character is laid out and every line fits the text's own box. */
+    private fun assertTextWhole(node: SemanticsNodeInteraction) {
+        assertWhole(node)
+        val layout = node.textLayout()
+        val box = node.fetchSemanticsNode().size
+        val text = layout.layoutInput.text.text
+        val lastLine = layout.lineCount - 1
+        assertEquals("'$text' is missing characters", text.length, layout.getLineEnd(lastLine, visibleEnd = true))
+        (0..lastLine).forEach { line ->
+            assertTrue("line $line of '$text' is wider than its box", layout.getLineRight(line) <= box.width + 1)
+        }
+        assertTrue("'$text' is cut off vertically", layout.getLineBottom(lastLine) <= box.height + 1)
+    }
+
+    @Test
+    fun theCorrectionSheetOfATimedSetHasNoClockWhileOneRuns() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise(sets = listOf(set(1, durationSeconds = 45)))
+        setFocus({ exercise }, prepareEntry = { startClock(now - TWENTY_SECONDS_MILLIS) })
+
+        openCorrectionSheet(1)
+
+        // The one `Clock` and `Stop` are the focus card behind the sheet.
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_clock_label)).assertCountEquals(1)
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_clock_stop)).assertCountEquals(1)
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_clock_start)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(format(R.string.workout_focus_time_hint, "0:05")).assertCountEquals(2)
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_time_hint_from_clock)).assertCountEquals(0)
+    }
+
+    @Test
+    fun theCorrectionSheetKeepsTheNormalHintAfterAStop() {
+        val now = System.currentTimeMillis()
+        val exercise = timedExercise(sets = listOf(set(1, durationSeconds = 45)))
+        setFocus(
+            { exercise },
+            prepareEntry = {
+                startClock(now - NINETY_SECONDS_MILLIS)
+                stopClock(now)
+            },
+        )
+
+        openCorrectionSheet(1)
+
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_clock_label)).assertCountEquals(1)
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_clock_start_again)).assertCountEquals(1)
+        composeRule.onAllNodesWithText(format(R.string.workout_focus_time_hint, "0:05")).assertCountEquals(1)
+        composeRule.onAllNodesWithText(string(R.string.workout_focus_time_hint_from_clock)).assertCountEquals(1)
+    }
 }
 
 private val REST_STRIP_LABELS =
@@ -1967,3 +2580,28 @@ private const val SNACKBAR_WAIT_MILLIS = 10_000L
 private const val LARGE_FONT_SCALE_MEDIUM = 1.3f
 private const val LARGE_FONT_SCALE_MAX = 2.0f
 private const val SHORT_SHEET_HEIGHT = 300
+
+/** What each state of the clock's card should be drawn in, read from the theme the test mounts. */
+private class ClockColors(
+    val hairlineEdge: Color,
+    val accentEdge: Color,
+    val plainTime: Color,
+    val accentTime: Color,
+)
+
+private val FIXED_TARGET = 60L..60L
+private val RANGE_TARGET = 30L..45L
+private const val SECONDS_PER_MINUTE = 60L
+private const val NINETY_SECONDS = 90L
+private const val NINETY_SECONDS_MILLIS = 90_000L
+private const val SIXTY_SEVEN_SECONDS = 67L
+private const val SIXTY_SEVEN_SECONDS_MILLIS = 67_000L
+private const val SIXTY_SECONDS_MILLIS = 60_000L
+private const val FORTY_SECONDS_MILLIS = 40_000L
+private const val THIRTY_EIGHT_SECONDS_MILLIS = 38_000L
+private const val TWENTY_SECONDS_MILLIS = 20_000L
+private const val ONE_HOUR_MILLIS = 3_600_000L
+private const val JUST_UNDER_A_SECOND_MILLIS = 999L
+private const val CLOCK_MAIN_BUTTON_HEIGHT = 52
+private const val CLOCK_START_AGAIN_HEIGHT = 48
+private const val COLOR_TOLERANCE = 0.02f

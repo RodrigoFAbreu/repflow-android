@@ -136,6 +136,14 @@ The user can:
   warm-up mark clear. A new exercise starts from last session's last working
   set (empty for one never done). `Log set` stays disabled until reps (or
   seconds) are present. `Undo last` corrects a mistaken set
+- Time a timed exercise with the `Clock` card above its time: `Start` counts up
+  in m:ss with the target in view, and the card changes when the target is
+  reached, or the bottom of a range, while it keeps counting. `Log set` waits for
+  `Stop`. `Stop` fills the time in, where it can still be changed before `Log
+  set`, and never logs a set. A stop under one second leaves the time as it was.
+  Once a set has saved, the clock is back at `0:00` with `Start` offered and the
+  time stays for the next set. Typing or stepping a time still works without it.
+  A logged set's correction sheet has no clock
 - Record RPE
 - Record optional technique quality
 - Record optional pain

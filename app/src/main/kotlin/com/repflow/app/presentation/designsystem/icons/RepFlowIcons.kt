@@ -230,6 +230,14 @@ object RepFlowIcons {
     @DrawableRes
     val playFill: Int = R.drawable.ic_ph_play_fill
 
+    /** The set clock's `Start` (`20o`, `ph-bold ph-play`). `timed-set-clock` CP2. */
+    @DrawableRes
+    val playBold: Int = R.drawable.ic_ph_play_bold
+
+    /** The set clock's `Stop` and its `Stopped at` line (`20o`, `ph-bold ph-stop`). `timed-set-clock` CP2. */
+    @DrawableRes
+    val stopBold: Int = R.drawable.ic_ph_stop_bold
+
     /**
      * An invalidated workout: History's `invalidated` badge, its `Show
      * invalidated` chip and the detail's `Invalidate workout` (`3a`,

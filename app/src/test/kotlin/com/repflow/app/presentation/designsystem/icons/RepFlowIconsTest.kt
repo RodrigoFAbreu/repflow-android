@@ -180,6 +180,9 @@ class RepFlowIconsTest {
                 "ic_ph_upload_simple",
                 // Home's quiet backup line (backup-reminder CP2, `10n`).
                 "ic_ph_floppy_disk",
+                // The set clock's `Start` and `Stop` (timed-set-clock CP2, `20o`).
+                "ic_ph_play_bold",
+                "ic_ph_stop_bold",
             )
     }
 }
