@@ -45,7 +45,9 @@ The bottom navigation carries four top-level destinations, in this order:
   a card offers `Restore the safety copy`, the data the last restore replaced,
   once such a copy exists. A confirmed restore covers the whole app with a
   Restoring screen until it ends, with nothing to press and no way back, and its
-  outcome shows on Backup when the screen lifts.
+  outcome shows on Backup when the screen lifts. A `Backup reminder` switch, on
+  by default, follows `Backup and restore`; off, Home shows no note about an old
+  backup. It is a device setting, so a backup or restore doesn't carry it.
 - **Recovery entry** opens from Home's recovery card (`Log`); recovery and
   futsal history open from the entry screen.
 - **Workout mode replaces the navigation.** The workout board, focus mode

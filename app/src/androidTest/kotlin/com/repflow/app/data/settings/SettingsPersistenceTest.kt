@@ -17,11 +17,13 @@ import com.repflow.app.data.backup.LocalTrainingDataRepository
 import com.repflow.app.domain.common.DomainResult
 import com.repflow.app.infrastructure.database.RepFlowDatabase
 import com.repflow.app.infrastructure.database.SETTINGS_SEED_CALLBACK
+import com.repflow.app.infrastructure.di.DatabaseModule
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -63,6 +65,7 @@ class SettingsPersistenceTest {
             defaultRestSeconds = 150,
             extraSetFields = ExtraSetFields.OFF,
             lastBackupAt = Instant.ofEpochMilli(1_700_000_000_000L),
+            backupReminder = false,
         )
 
     @Before
@@ -101,6 +104,7 @@ class SettingsPersistenceTest {
         assertEquals(90, row.defaultRestSeconds)
         assertEquals("COLLAPSED", row.extraSetFields)
         assertEquals(null, row.lastBackupAt)
+        assertEquals(true, row.backupReminder)
     }
 
     @Test
@@ -121,6 +125,35 @@ class SettingsPersistenceTest {
             assertEquals(Instant.ofEpochMilli(42), settings.get().lastBackupAt)
             settings.update { it.copy(lastBackupAt = null) }
             assertEquals(null, settings.get().lastBackupAt)
+        }
+
+    @Test
+    fun theBackupReminderIsOnByDefaultAndItsValuePersistsAcrossAReopenedDatabase() =
+        runBlocking {
+            assertTrue(AppSettings.DEFAULT.backupReminder)
+            assertTrue(settings.get().backupReminder)
+
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            context.deleteDatabase(REOPENED_DB)
+            try {
+                val first = DatabaseModule.buildRepFlowDatabase(context, REOPENED_DB)
+                try {
+                    val repository = LocalSettingsRepository(first)
+                    assertTrue(repository.get().backupReminder)
+                    assertEquals(DomainResult.Success(Unit), repository.update { it.copy(backupReminder = false) })
+                } finally {
+                    first.close()
+                }
+
+                val reopened = DatabaseModule.buildRepFlowDatabase(context, REOPENED_DB)
+                try {
+                    assertFalse(LocalSettingsRepository(reopened).get().backupReminder)
+                } finally {
+                    reopened.close()
+                }
+            } finally {
+                context.deleteDatabase(REOPENED_DB)
+            }
         }
 
     @Test
@@ -266,6 +299,8 @@ class SettingsPersistenceTest {
     }
 
     private companion object {
+        const val REOPENED_DB = "settings-persistence-reopened-test"
+
         val TRAINING_TABLES =
             listOf(
                 "exercises",

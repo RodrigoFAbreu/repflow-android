@@ -14,7 +14,9 @@ import androidx.room.PrimaryKey
  * holding a stable string, never an ordinal. Version 9 adds `theme`,
  * `extra_set_fields` (stable strings), `default_rest_seconds` and the nullable
  * `last_backup_at` (epoch milliseconds) via
- * [com.repflow.app.infrastructure.database.MIGRATION_8_9].
+ * [com.repflow.app.infrastructure.database.MIGRATION_8_9]. Version 10 adds the
+ * `backup_reminder` switch, on by default, via
+ * [com.repflow.app.infrastructure.database.MIGRATION_9_10].
  *
  * These are device settings, not training data: the table is deliberately
  * outside the backup snapshot, and neither a restore nor `Erase all data`
@@ -43,6 +45,8 @@ data class SettingsEntity(
     val extraSetFields: String = "COLLAPSED",
     @ColumnInfo(name = "last_backup_at")
     val lastBackupAt: Long? = null,
+    @ColumnInfo(name = "backup_reminder", defaultValue = "1")
+    val backupReminder: Boolean = true,
 ) {
     companion object {
         /** The one row's fixed primary key. */

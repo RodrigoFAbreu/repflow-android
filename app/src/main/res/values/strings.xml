@@ -698,6 +698,8 @@
     <string name="settings_archived_row">Archived</string>
     <string name="settings_archived_row_meta">Exercises and plans</string>
     <string name="settings_backup_row">Backup and restore</string>
+    <string name="settings_backup_reminder">Backup reminder</string>
+    <string name="settings_backup_reminder_meta">Shows a note on Home when your last backup is 21 or more days old</string>
     <string name="settings_default_rest_sheet_title">Default rest</string>
     <string name="settings_default_rest_sheet_caption">Used when neither the plan nor the exercise sets a rest.</string>
     <string name="settings_default_rest_other">Other</string>

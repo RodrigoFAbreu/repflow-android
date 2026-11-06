@@ -406,6 +406,21 @@ val MIGRATION_8_9: Migration =
     }
 
 /**
+ * The real, additive 9-to-10 migration (`backup-reminder` CP1): one
+ * `ALTER TABLE settings ADD COLUMN` with a default, so the pinned row stays
+ * valid, no row is rewritten and every existing install gets the reminder on.
+ * [INSERT_DEFAULT_SETTINGS_ROW_SQL] is deliberately unchanged, as in
+ * [MIGRATION_8_9].
+ */
+@Suppress("MagicNumber")
+val MIGRATION_9_10: Migration =
+    object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `settings` ADD COLUMN `backup_reminder` INTEGER NOT NULL DEFAULT 1")
+        }
+    }
+
+/**
  * Every migration, in order, shared by the production database builder and the
  * tests. A test pins it to [RepFlowDatabase.VERSION], so a future migration
  * cannot be forgotten.
@@ -420,6 +435,7 @@ val ALL_MIGRATIONS: Array<Migration> =
         MIGRATION_6_7,
         MIGRATION_7_8,
         MIGRATION_8_9,
+        MIGRATION_9_10,
     )
 
 /**

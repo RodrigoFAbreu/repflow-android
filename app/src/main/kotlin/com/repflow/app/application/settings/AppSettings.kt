@@ -23,6 +23,7 @@ import java.time.Instant
  * @property extraSetFields how focus mode shows RPE, pain and technique.
  * @property lastBackupAt when a backup export last succeeded on this device, or
  *   `null` before the first.
+ * @property backupReminder Home shows a quiet note when the last backup is old.
  */
 data class AppSettings(
     val restTimerAutoStart: Boolean,
@@ -34,6 +35,7 @@ data class AppSettings(
     val defaultRestSeconds: Int = DEFAULT_REST_SECONDS,
     val extraSetFields: ExtraSetFields = ExtraSetFields.DEFAULT,
     val lastBackupAt: Instant? = null,
+    val backupReminder: Boolean = true,
 ) {
     companion object {
         /** The initial app-wide default rest: 1:30, so behaviour is unchanged on upgrade. */
@@ -56,6 +58,7 @@ data class AppSettings(
                 defaultRestSeconds = DEFAULT_REST_SECONDS,
                 extraSetFields = ExtraSetFields.DEFAULT,
                 lastBackupAt = null,
+                backupReminder = true,
             )
     }
 }

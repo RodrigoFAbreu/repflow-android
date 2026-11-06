@@ -71,6 +71,27 @@ class SettingsViewModelTest {
         }
 
     @Test
+    fun `the backup reminder switch writes only itself`() =
+        runTest {
+            val before = settingsRepository.get()
+            assertTrue(before.isOn(SettingToggle.BACKUP_REMINDER))
+
+            viewModel.onToggle(SettingToggle.BACKUP_REMINDER, false)
+
+            assertEquals(before.copy(backupReminder = false), settingsRepository.get())
+            assertFalse(settingsRepository.get().isOn(SettingToggle.BACKUP_REMINDER))
+            assertEquals(
+                false,
+                viewModel.uiState.value.settings
+                    ?.backupReminder,
+            )
+
+            viewModel.onToggle(SettingToggle.BACKUP_REMINDER, true)
+
+            assertEquals(before, settingsRepository.get())
+        }
+
+    @Test
     fun `a failed write reports it and leaves the stored value`() =
         runTest {
             settingsRepository.nextUpdateFailure = SettingsPersistenceError.Unavailable
@@ -210,5 +231,6 @@ class SettingsViewModelTest {
         assertTrue(defaults.restTimerNotification)
         assertFalse(defaults.keepScreenAwake)
         assertTrue(defaults.confirmBeforeFinishing)
+        assertTrue(defaults.backupReminder)
     }
 }

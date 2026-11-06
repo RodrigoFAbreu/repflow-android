@@ -231,12 +231,38 @@ class SettingsScreenTest {
                 string(R.string.settings_library_row),
                 string(R.string.settings_archived_row),
                 string(R.string.settings_backup_row),
+                string(R.string.settings_backup_reminder),
                 string(R.string.settings_erase_action),
             ).map { composeRule.onNodeWithText(it).getUnclippedBoundsInRoot().top }
 
         assertEquals(tops.sorted(), tops)
         assertEquals(tops.size, tops.toSet().size)
         composeRule.onAllNodesWithText(string(R.string.settings_library_meta)).assertCountEquals(1)
+    }
+
+    /** `40e`: the switch, on by default, with its meta; pressing it reports it off. */
+    @Test
+    fun theBackupReminderIsOnByDefaultWithItsMetaAndPressingItSwitchesItOff() {
+        render(AppSettings.DEFAULT)
+
+        assertEquals("Backup reminder", string(R.string.settings_backup_reminder))
+        assertEquals("Shows a note on Home when your last backup is 21 or more days old", string(R.string.settings_backup_reminder_meta))
+        composeRule
+            .onNodeWithText(
+                string(R.string.settings_backup_reminder_meta),
+                useUnmergedTree = true,
+            ).performScrollTo()
+            .assertIsDisplayed()
+        composeRule.onNodeWithText(string(R.string.settings_backup_reminder)).assertIsOn().performClick()
+
+        assertEquals(listOf(SettingToggle.BACKUP_REMINDER to false), toggles)
+    }
+
+    @Test
+    fun theBackupReminderShowsAStoredOff() {
+        render(AppSettings.DEFAULT.copy(backupReminder = false))
+
+        composeRule.onNodeWithText(string(R.string.settings_backup_reminder)).performScrollTo().assertIsOff()
     }
 
     @Test

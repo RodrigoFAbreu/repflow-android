@@ -69,6 +69,7 @@ private fun SettingsEntity.toSettings(): AppSettings =
         defaultRestSeconds = defaultRestSeconds,
         extraSetFields = ExtraSetFields.fromStorage(extraSetFields),
         lastBackupAt = lastBackupAt?.let(Instant::ofEpochMilli),
+        backupReminder = backupReminder,
     )
 
 private fun AppSettings.toEntity(): SettingsEntity =
@@ -82,4 +83,5 @@ private fun AppSettings.toEntity(): SettingsEntity =
         defaultRestSeconds = defaultRestSeconds,
         extraSetFields = extraSetFields.storageValue,
         lastBackupAt = lastBackupAt?.toEpochMilli(),
+        backupReminder = backupReminder,
     )
