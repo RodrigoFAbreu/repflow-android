@@ -12629,7 +12629,7 @@
       "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
       "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
       "governing_workflow_version": "2.2",
-      "phase": "AWAITING_LOCAL_IMPLEMENTATION_REVIEW",
+      "phase": "AWAITING_FUNCTIONAL_REVIEW",
       "plan_revision": 2,
       "implementation_revision": 2,
       "functional_review_round": null,
@@ -12742,7 +12742,252 @@
           "workflow_release": "2.25.5"
         }
       },
-      "technical_approval": null,
+      "technical_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+        "approved_review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+        "review_content_manifest": [
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStructuralPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "eecac256e4a527d387758e415a633d2787f3d6c5"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/history/HistoryDetailScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7a966a95c0076ca024f40100ed5ba0e703b62a5b"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/recovery/RecoveryFutsalScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "3ddccda8a46fb13c84356b126ef9493fc42012b8"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/settings/SettingsScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d53c2183ec5d778999a3b5a8dd3b330b293f212c"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2c6d629938b5341d0d540ba5adb78d5efec4640a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutPreferencesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e1f66194ed679813eff20fbed05dd4b1260b1e5a"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/ActiveWorkoutScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "e5768b4cacd496ef0286ccc6bddcca82d3e281ec"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/EntryStepperWidthTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "95f58148974cb10a9a6083e7b6efb90794ba9d80"
+          },
+          {
+            "path": "app/src/androidTest/kotlin/com/repflow/app/presentation/workout/WorkoutDoneScreenTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "220f8dcac5a1bbe29fcead0481c2d52dade778e9"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowDuration.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d4061f04808f36aebc5b9ee9724e1ddafb95a8b5"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowNumericKeypad.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "70a7c745a637a431ea3d45cb4493a61673ac1356"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowStepper.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fc10813e37636aa785b44b5be0dce9ecf4a19354"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryDetailScreen.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "05ea2f98caa070f6a9ab7114987d72e282b906b7"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/history/HistoryModel.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "de693432bf10c7d6034c48940567fbececa297d1"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/settings/SettingsChoices.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2bdc7ce033f908ff3b674eb0859c5161a6fa6263"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorRows.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "1f6902d9b4fd188423650bdb56837700d8896748"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/trainingplan/editor/TrainingPlanEditorTargets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "c7d2324e4f28387f195add2e6dda1a6261316ebe"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutDoneText.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "fcbbd8f3675aded4ad0a2e9610e3de8af5a2a706"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocus.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "bd6aa33892c10faf3fb821a3e5eec8620e938bbc"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusEntry.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "febf465091d8a03017ea2d0b2f54731f97bcb5ae"
+          },
+          {
+            "path": "app/src/main/kotlin/com/repflow/app/presentation/workout/WorkoutFocusSets.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "2994a9d73db94fdd851c6d748cd5ad5dd2fbe63b"
+          },
+          {
+            "path": "app/src/main/res/values/strings.xml",
+            "exists": true,
+            "mode": "100644",
+            "blob": "7682ff11d6b301de2225ed85ada9f5049dd40435"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowDurationTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "15b8622fad16db1024df2aa2da3f68b13faefb7b"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowKeypadInputTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "96bd45c4143b5c37232e26916c9c32c559cf3d58"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/designsystem/components/RepFlowPrimitivesTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "ae1c84e297323fe54f0f857f2bd33e20732bf811"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/trainingplan/editor/PlanRowSteppingTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a12a8cd59324aecc6fa401ace6781a76b4112bc8"
+          },
+          {
+            "path": "app/src/test/kotlin/com/repflow/app/presentation/workout/WorkoutDoneTest.kt",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a8ca1a89c5ddabbfe227dd93474ec0f3570fedea"
+          },
+          {
+            "path": "docs/UX_FLOWS.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "6143d28d28d600bb80a501e3dbb48b2f8ecf4ea4"
+          },
+          {
+            "path": "docs/ai-workflow/registry/timed-entry-mmss-artifacts.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "d4debf021cac26841f0a92697a422586937eb154"
+          }
+        ],
+        "reviewed_content_commit": "410e32c79be33ca54c5723985aca504afa1b771b",
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T09:53:30Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+            "ledger": {
+              "local": {
+                "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "692cff0693930a9a986c61615c451534db8df737b1e62ab8d5680e5be3ded4bc",
+                "ledger_entry_sha256": "4954813bf2c9848b3224439d7c167078a940e7d00481c8a76d45228f54c4b243",
+                "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "26b322324265ae99e7b25639af0768dbf45d877f1623fc20b9d71d246b940cf1",
+                "ledger_entry_sha256": "496216b0dae425dbe402fd1d6e95d0e2eb6360d9a34307913415bc262ff4f32f",
+                "run_ref": "codex:20261106T094908Z-eed59943",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T09:53:30Z",
+          "workflow_release": "2.25.5"
+        }
+      },
       "technical_review_block_pins": [],
       "plan_review_stages": {
         "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
@@ -12773,12 +13018,12 @@
           "external": 1
         },
         "implementation": {
-          "local": 1,
-          "external": 0
+          "local": 2,
+          "external": 1
         }
       },
-      "state_revision": 18,
-      "last_transition": "2026-11-06T09:08:30Z",
+      "state_revision": 21,
+      "last_transition": "2026-11-06T09:53:30Z",
       "feedback_layout": "scoped",
       "plan_review_binding": {
         "status": "BOUND",
@@ -12983,6 +13228,27 @@
               "at": "2026-11-06T08:12:32Z"
             }
           ]
+        }
+      },
+      "implementation_review_stages": {
+        "review_content_id": "9af71963fcf51783e18c22ebbfb1f06087d9af5455ece654bd29307dd83ef3cd",
+        "LOCAL_MODEL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T09:48:30Z",
+          "verdict_sha256": "692cff0693930a9a986c61615c451534db8df737b1e62ab8d5680e5be3ded4bc",
+          "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_IMPLEMENTATION_REVIEW": {
+          "bundle_id": "ef181c1b53bd6c567a7cfd18841ba8683887edb1454bd87b2b695de480bda147",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T09:52:44Z",
+          "verdict_sha256": "26b322324265ae99e7b25639af0768dbf45d877f1623fc20b9d71d246b940cf1",
+          "run_ref": "codex:20261106T094908Z-eed59943",
+          "reviewer_model": "openai/gpt-6.1-sol"
         }
       }
     }
