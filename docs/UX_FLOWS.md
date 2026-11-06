@@ -200,9 +200,9 @@ the exercise shows the clock still counting from its start time. The clock is
 kept in the activity's saved state, not in the database, so it also survives a
 rotation, locking the phone, switching apps and the system ending the process.
 It doesn't survive what discards saved state: swiping the app away from recents,
-a force stop or a device restart, and it may not survive a crash or an app update.
-The workout itself comes back from the database, and `Start` is offered again with
-no message.
+a force stop, a device restart, or on Android 9 to 11 `Back` from Home, which closes
+the app there. It may not survive a crash or an app update. The workout itself comes
+back from the database, and `Start` is offered again with no message.
 
 ## Complete workout
 
@@ -220,6 +220,10 @@ screen shows:
   `IMPROVEMENT_ROADMAP.md` §9.7)*
 - Optional workout notes *(declared intent — no notes field exists;
   `IMPROVEMENT_ROADMAP.md` §9.3)*
+
+Only logged sets are saved. A timed set's clock still running at `Finish`, or at
+`Next ›` on the last exercise, goes with no message, as a typed but unlogged entry
+does.
 
 The completed workout becomes historical data and must not be changed by later
 training-plan edits.
