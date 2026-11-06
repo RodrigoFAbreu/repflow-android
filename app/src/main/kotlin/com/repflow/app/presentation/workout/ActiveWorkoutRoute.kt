@@ -131,7 +131,7 @@ fun ActiveWorkoutRoute(
         onOpenRecommendation = onOpenRecommendation,
         onRecordSet = viewModel::onRecordSet,
         onUndoLastSet = viewModel::onUndoLastSet,
-        onEditLastSet = viewModel::onEditLastSet,
+        onEditSet = viewModel::onEditSet,
         onAddRestTime = { viewModel.onAddRestTime(REST_ADJUST_SECONDS) },
         onRemoveRestTime = { viewModel.onRemoveRestTime(REST_ADJUST_SECONDS) },
         onSkipRestTimer = viewModel::onSkipRestTimer,

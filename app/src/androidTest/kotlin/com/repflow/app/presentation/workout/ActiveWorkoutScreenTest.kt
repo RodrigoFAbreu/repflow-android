@@ -93,7 +93,8 @@ class ActiveWorkoutScreenTest {
         openFirstExercise: Boolean = true,
         exercises: List<ActiveExerciseUi> = listOf(exercise),
         onFocusExercise: (WorkoutExerciseId?) -> Unit = {},
-        onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit = { _, _, _, _, _, _, _, _ -> },
+        onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit =
+            { _, _, _, _, _, _, _, _, _ -> },
         onCompleteWorkout: (WorkoutSessionId) -> Unit = {},
         errorMessage: State<ActiveWorkoutErrorReason?> = mutableStateOf(null),
         onErrorShown: () -> Unit = {},
@@ -124,7 +125,7 @@ class ActiveWorkoutScreenTest {
                     onOpenRecommendation = onOpenRecommendation,
                     onRecordSet = onRecordSet,
                     onUndoLastSet = {},
-                    onEditLastSet = onEditLastSet,
+                    onEditSet = onEditSet,
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},
@@ -731,18 +732,18 @@ class ActiveWorkoutScreenTest {
 
     /**
      * The pencil on the most recently logged set opens the correction sheet
-     * (`D31`, `D66`): it corrects what was lifted through `onEditLastSet`, and
+     * (`D31`, `D66`): it corrects what was lifted through `onEditSet`, and
      * what isn't touched goes back unchanged, a half RPE included.
      */
     @Test
-    fun correctingTheLastSetKeepsItsOtherFieldsAndReachesOnEditLastSet() {
+    fun correctingASetKeepsItsOtherFieldsAndReachesOnEditSet() {
         var edited: List<Any?>? = null
         setContent(
             exercise(
                 ExerciseTrackingType.WEIGHT_AND_REPS,
                 sets = listOf(set(1, load = 60.0, reps = 8, rpe = 7.5, pain = 1)),
             ),
-            onEditLastSet = { _, load, reps, duration, rpe, isWarmup, pain, technique ->
+            onEditSet = { _, _, load, reps, duration, rpe, isWarmup, pain, technique ->
                 edited = listOf(load, reps, duration, rpe, isWarmup, pain, technique)
             },
         )
@@ -971,7 +972,7 @@ class ActiveWorkoutScreenTest {
     private fun correctATimedSetOf45Seconds(onEdited: (Int?) -> Unit) {
         setContent(
             exercise(ExerciseTrackingType.DURATION, sets = listOf(set(1, durationSeconds = 45))),
-            onEditLastSet = { _, _, _, duration, _, _, _, _ -> onEdited(duration) },
+            onEditSet = { _, _, _, _, duration, _, _, _, _ -> onEdited(duration) },
         )
         composeRule
             .onNode(hasClickAction() and hasText(composeRule.activity.getString(R.string.workout_active_set_row_duration, 1, "0:45")))
@@ -1024,7 +1025,7 @@ class ActiveWorkoutScreenTest {
         setContent(
             exercise(trackingType, sets = listOf(lastSet)),
             extraSetFields = extraSetFields,
-            onEditLastSet = { _, load, reps, duration, rpe, isWarmup, pain, technique ->
+            onEditSet = { _, _, load, reps, duration, rpe, isWarmup, pain, technique ->
                 onEdited(listOf(load, reps, duration, rpe, isWarmup, pain, technique))
             },
         )
@@ -1125,7 +1126,7 @@ class ActiveWorkoutScreenTest {
     }
 
     @Test
-    fun tappedCellsReachOnEditLastSet() {
+    fun tappedCellsReachOnEditSet() {
         var edited: List<Any?>? = null
         correct(set(1, load = 60.0, reps = 8, rpe = 7.0, pain = 1, technique = 3)) { edited = it }
 
@@ -1637,7 +1638,7 @@ class ActiveWorkoutScreenTest {
                     onOpenRecommendation = {},
                     onRecordSet = { _, _, _, _, _, _, _, _, _ -> },
                     onUndoLastSet = {},
-                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},

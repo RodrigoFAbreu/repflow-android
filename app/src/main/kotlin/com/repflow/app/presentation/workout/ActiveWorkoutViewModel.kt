@@ -18,8 +18,8 @@ import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AddWorkoutExerciseCommand
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.EditLastWorkoutSet
-import com.repflow.app.application.workout.EditLastWorkoutSetCommand
+import com.repflow.app.application.workout.EditWorkoutSet
+import com.repflow.app.application.workout.EditWorkoutSetCommand
 import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
@@ -47,6 +47,7 @@ import com.repflow.app.domain.workout.WorkoutExercise
 import com.repflow.app.domain.workout.WorkoutExerciseId
 import com.repflow.app.domain.workout.WorkoutSession
 import com.repflow.app.domain.workout.WorkoutSessionId
+import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.progression.ProgressionRecommendationUi
 import com.repflow.app.presentation.progression.toSummaryUi
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -104,7 +105,7 @@ class ActiveWorkoutViewModel
         private val addWorkoutExercise: AddWorkoutExercise,
         private val recordWorkoutSet: RecordWorkoutSet,
         private val undoLastWorkoutSet: UndoLastWorkoutSet,
-        private val editLastWorkoutSet: EditLastWorkoutSet,
+        private val editWorkoutSet: EditWorkoutSet,
         private val startRestTimer: StartRestTimer,
         private val adjustRestTimer: AdjustRestTimer,
         private val skipRestTimer: SkipRestTimer,
@@ -402,8 +403,9 @@ class ActiveWorkoutViewModel
         }
 
         @Suppress("LongParameterList")
-        fun onEditLastSet(
+        fun onEditSet(
             exerciseId: WorkoutExerciseId,
+            setId: WorkoutSetId,
             load: Double?,
             reps: Int?,
             durationSeconds: Int? = null,
@@ -414,10 +416,11 @@ class ActiveWorkoutViewModel
         ) {
             val sessionId = activeSessionId() ?: return
             launchAction {
-                editLastWorkoutSet(
-                    EditLastWorkoutSetCommand(
+                editWorkoutSet(
+                    EditWorkoutSetCommand(
                         sessionId = sessionId,
                         exerciseId = exerciseId,
+                        setId = setId,
                         load = load,
                         reps = reps,
                         durationSeconds = durationSeconds,

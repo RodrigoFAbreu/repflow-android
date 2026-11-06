@@ -82,7 +82,7 @@ class ActiveWorkoutPreferencesTest {
                     onOpenRecommendation = {},
                     onRecordSet = { _, _, _, _, rpe, _, pain, technique, _ -> onRecordExtras(rpe, pain, technique) },
                     onUndoLastSet = {},
-                    onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                    onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                     onAddRestTime = {},
                     onRemoveRestTime = {},
                     onSkipRestTimer = {},

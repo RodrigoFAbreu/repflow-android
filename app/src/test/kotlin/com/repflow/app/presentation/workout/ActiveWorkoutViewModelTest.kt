@@ -19,7 +19,7 @@ import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.EditLastWorkoutSet
+import com.repflow.app.application.workout.EditWorkoutSet
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
 import com.repflow.app.application.workout.RecordWorkoutSet
@@ -86,7 +86,7 @@ class ActiveWorkoutViewModelTest {
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),
             undoLastWorkoutSet = UndoLastWorkoutSet(workoutRepository),
-            editLastWorkoutSet = EditLastWorkoutSet(workoutRepository, clock),
+            editWorkoutSet = EditWorkoutSet(workoutRepository, clock),
             startRestTimer = StartRestTimer(workoutRepository, clock),
             adjustRestTimer = AdjustRestTimer(workoutRepository, clock),
             skipRestTimer = SkipRestTimer(workoutRepository),
@@ -516,38 +516,33 @@ class ActiveWorkoutViewModelTest {
         }
 
     @Test
-    fun `editing the last set updates load, reps, rpe, warm-up status, pain and technique quality`() =
+    fun `editing a set by its id updates its load, reps, rpe, warm-up status, pain and technique and nothing else`() =
         runTest {
             seedExercise()
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
                 viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true, 1, 3)
-                awaitSingleSet()
+                viewModel.onRecordSet(withExercise.id, 62.5, 7, null, 7.0, false, 0, 5)
+                advanceUntilIdle()
+                val before = requireNotNull(workoutRepository.findActiveSession())
+                val (first, second) = before.exercises.single().sets
+                assertNotNull(before.restTimer)
 
-                viewModel.onEditLastSet(withExercise.id, 70.0, 5, null, 8.0, false, 2, 4)
-                var state = awaitItem()
-                while ((state.content as ActiveWorkoutContent.Active)
-                        .exercises
-                        .single()
-                        .sets
-                        .single()
-                        .load != 70.0
-                ) {
-                    state = awaitItem()
-                }
-                val edited =
-                    (state.content as ActiveWorkoutContent.Active)
-                        .exercises
-                        .single()
-                        .sets
-                        .single()
+                viewModel.onEditSet(withExercise.id, first.id, 70.0, 5, null, 8.0, false, 2, 4)
+                advanceUntilIdle()
+
+                val after = requireNotNull(workoutRepository.findActiveSession())
+                val (edited, storedSecond) = after.exercises.single().sets
+                assertEquals(first.id, edited.id)
                 assertEquals(70.0, edited.load)
                 assertEquals(5, edited.reps)
                 assertEquals(8.0, edited.rpe)
                 assertEquals(false, edited.isWarmup)
                 assertEquals(2, edited.pain)
                 assertEquals(4, edited.techniqueQuality)
+                assertEquals(second, storedSecond)
+                assertEquals(before.restTimer, after.restTimer)
                 cancelAndIgnoreRemainingEvents()
             }
         }

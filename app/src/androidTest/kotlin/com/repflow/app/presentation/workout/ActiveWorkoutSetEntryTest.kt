@@ -138,7 +138,7 @@ class ActiveWorkoutSetEntryTest {
                     }
                 },
                 onUndoLastSet = {},
-                onEditLastSet = { _, _, _, _, _, _, _, _ -> },
+                onEditSet = { _, _, _, _, _, _, _, _, _ -> },
                 onAddRestTime = {},
                 onRemoveRestTime = {},
                 onSkipRestTimer = {},

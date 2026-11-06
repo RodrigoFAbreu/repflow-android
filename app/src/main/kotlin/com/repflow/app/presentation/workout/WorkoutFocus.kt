@@ -55,6 +55,7 @@ import com.repflow.app.application.settings.ExtraSetFields
 import com.repflow.app.domain.exercise.ExerciseId
 import com.repflow.app.domain.exercise.ExerciseTrackingType
 import com.repflow.app.domain.workout.WorkoutExerciseId
+import com.repflow.app.domain.workout.WorkoutSetId
 import com.repflow.app.presentation.designsystem.RepFlowColor
 import com.repflow.app.presentation.designsystem.RepFlowNumericTextStyle
 import com.repflow.app.presentation.designsystem.RepFlowSpacing
@@ -101,7 +102,7 @@ internal fun WorkoutFocus(
     onOpenRecommendation: (ExerciseId) -> Unit,
     onRecordSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?, () -> Unit) -> Unit,
     onUndoLastSet: (WorkoutExerciseId) -> Unit,
-    onEditLastSet: (WorkoutExerciseId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
+    onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
@@ -215,8 +216,9 @@ internal fun WorkoutFocus(
             onDismissRequest = { correcting = false },
             onSave = { load, reps, seconds, rpe, pain, technique ->
                 correcting = false
-                onEditLastSet(
+                onEditSet(
                     exercise.id,
+                    lastSet.id,
                     load?.toDouble(),
                     reps?.toInt(),
                     seconds?.toInt(),

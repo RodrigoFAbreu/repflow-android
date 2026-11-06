@@ -20,7 +20,7 @@ import com.repflow.app.application.workout.AbandonWorkoutSession
 import com.repflow.app.application.workout.AddWorkoutExercise
 import com.repflow.app.application.workout.AdjustRestTimer
 import com.repflow.app.application.workout.CompleteWorkoutSession
-import com.repflow.app.application.workout.EditLastWorkoutSet
+import com.repflow.app.application.workout.EditWorkoutSet
 import com.repflow.app.application.workout.InMemoryWorkoutRepository
 import com.repflow.app.application.workout.LastPerformance
 import com.repflow.app.application.workout.ObserveActiveWorkoutSession
@@ -80,7 +80,7 @@ class ActiveWorkoutSeedTest {
             addWorkoutExercise = AddWorkoutExercise(workoutRepository, ids),
             recordWorkoutSet = RecordWorkoutSet(workoutRepository, clock, ids),
             undoLastWorkoutSet = UndoLastWorkoutSet(workoutRepository),
-            editLastWorkoutSet = EditLastWorkoutSet(workoutRepository, clock),
+            editWorkoutSet = EditWorkoutSet(workoutRepository, clock),
             startRestTimer = StartRestTimer(workoutRepository, clock),
             adjustRestTimer = AdjustRestTimer(workoutRepository, clock),
             skipRestTimer = SkipRestTimer(workoutRepository),
