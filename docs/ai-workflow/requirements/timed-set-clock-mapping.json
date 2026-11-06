@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "work_item_id": "timed-set-clock",
+  "requirements": {
+    "R1": {
+      "description": "A timed exercise shows a Clock card above its Time card, reading 0:00, the target line and Start; a weight-and-reps or reps-only exercise shows none and looks as before, and a logged timed set's correction sheet shows no clock",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    },
+    "R2": {
+      "description": "Start makes the card count up in m:ss from a stored start moment, with the target line in view and Stop in Start's place; on reaching the target the time turns accent, the card gets an accent edge, and a check mark and words say so while it keeps counting; the readout never shows a negative time",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    },
+    "R3": {
+      "description": "Stop writes the elapsed whole seconds into the entry, still editable before Log set; the card keeps the time with Stopped at and offers Start again, and the Time card says it was filled in; once a set has saved the clock is back at 0:00 with Start offered and the Time card keeps its value, and a failed save changes nothing; a stop under one second leaves the entry as it was and goes back to before Start; stopping never logs a set",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    },
+    "R4": {
+      "description": "The running clock survives a rotation, a trip to the Board, switching exercise, process death, and Leave it running followed by Resume, because it is derived from the start moment; Log set is disabled while it runs",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2",
+        "CP3"
+      ]
+    },
+    "R5": {
+      "description": "Start ends a running rest and cancels its alert, Stop never starts a rest, and the next rest starts after Log set as today",
+      "checkpoint_ids": [
+        "CP3"
+      ]
+    },
+    "R6": {
+      "description": "Typing or stepping a time by hand works as before; nothing is stored in Room, the backup or the CSV; the clock is readable by a screen reader and fits at font scale 2.0",
+      "checkpoint_ids": [
+        "CP2"
+      ]
+    }
+  }
+}

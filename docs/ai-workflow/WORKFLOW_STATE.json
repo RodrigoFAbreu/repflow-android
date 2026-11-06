@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "timed-set-clock",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -15203,6 +15203,345 @@
         },
         "evaluated_at": "2026-11-06T16:59:22Z",
         "workflow_release": "2.27.0"
+      }
+    },
+    "timed-set-clock": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "timed-set-clock",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/timed-set-clock-execution.md",
+      "registry_path": "docs/ai-workflow/registry/timed-set-clock-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/timed-set-clock-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 2,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "8cc7e5a4cc5c63cd68ba5f7939b88cdcb9bf8375",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+        "approved_review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/timed-set-clock-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "912b29c9d91f3d4b2682e799abc1bdfa62be4d98"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/timed-set-clock-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "a9455701f22cc6523c0d10203f1d939743327a4d"
+          },
+          {
+            "path": "docs/milestones/timed-set-clock-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "8b6be0d85c6ac805554ecf2a2995cbefe8b310ec"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T18:31:14Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+            "ledger": {
+              "local": {
+                "bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "82fc0ecf181d67d8b94c981559e266c0c0c146b2c2045f4b815142006d71836f",
+                "ledger_entry_sha256": "7844b82dd57faa525e45a68768cac341fb55f2d89b1318cf3e5ac2fc7f5beaa4",
+                "run_ref": "session:local .ai-review/timed-set-clock/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "c0552b9616c10c5d87f5958d6cec97ab4653445f5b15b9ffe5590e19d67b2aab",
+                "ledger_entry_sha256": "8c1fa913af88fa71c7112aaa7831ecb5fd6a0af197549f6d2fbf82b8e630e87e",
+                "run_ref": "codex:20261106T182617Z-9f7654e4",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T18:31:14Z",
+          "workflow_release": "2.28.0"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T18:25:57Z",
+          "verdict_sha256": "82fc0ecf181d67d8b94c981559e266c0c0c146b2c2045f4b815142006d71836f",
+          "run_ref": "session:local .ai-review/timed-set-clock/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T18:28:50Z",
+          "verdict_sha256": "c0552b9616c10c5d87f5958d6cec97ab4653445f5b15b9ffe5590e19d67b2aab",
+          "run_ref": "codex:20261106T182617Z-9f7654e4",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 9,
+      "last_transition": "2026-11-06T18:31:14Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T18:13:28Z",
+        "consumed": {
+          "review_content_id": "991821059860ce8050f8453293b50512294d5c53cfa36f7e8bedea79310030a9",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+          "bundle_id": "93161671c291399f4b1214d51ee818d51c608b24c9645534393c91b723d963f1",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "991821059860ce8050f8453293b50512294d5c53cfa36f7e8bedea79310030a9"
+      ],
+      "optional_findings": {
+        "F-a3748b814562": {
+          "digest": "a3748b814562ea60a6ca95b98fcfb4655a132eb25041f8415ae4c10121c48ef3",
+          "text": "CP1 will fail `detekt` as written. `SetEntryState` goes from 9 functions to 12, and `TooManyFunctions` has `thresholdInClasses: 11` (detekt 1.23.8's default, with `buildUponDefaultConfig = true` and no override). The plan's file-size note covers only CP2's composables. `@Suppress(\"TooManyFunctions\")` is the repository's precedent (`WorkoutSession.kt:23`).",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "991821059860ce8050f8453293b50512294d5c53cfa36f7e8bedea79310030a9",
+              "verdict": "REVISE",
+              "at": "2026-11-06T17:59:53Z"
+            }
+          ]
+        },
+        "F-9cff4749da27": {
+          "digest": "9cff4749da27eb77cc1137e31aad20b4d0c4ad366e4bed7335cb403253c61918",
+          "text": "`Finish`, or `Next ›` on the last exercise, with a clock running loses the hold without a word: `WorkoutFinishSheet` takes only `content`. A typed but unlogged entry goes the same way today, but a running clock is easier to forget. State it in the known limitations and `docs/UX_FLOWS.md`.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "991821059860ce8050f8453293b50512294d5c53cfa36f7e8bedea79310030a9",
+              "verdict": "REVISE",
+              "at": "2026-11-06T17:59:53Z"
+            }
+          ]
+        },
+        "F-c7af69eff8ac": {
+          "digest": "c7af69eff8ac6ba67a8f5f7fa4113a345763355e0415a92c51779c55282789a2",
+          "text": "A mis-tapped `Start` can't be cancelled. `Log set` is disabled until `Stop`, and a `Stop` after a second replaces the entry's time with those few seconds, so a time typed or stopped earlier has to be entered again. State it in the known limitations; a cancel is a design question, not this round's.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "991821059860ce8050f8453293b50512294d5c53cfa36f7e8bedea79310030a9",
+              "verdict": "REVISE",
+              "at": "2026-11-06T17:59:53Z"
+            }
+          ]
+        },
+        "F-ccaf122f057f": {
+          "digest": "ccaf122f057f9ab21a2e2c987f03a79861e584d31386ed7f9091c0c0a5a95ce5",
+          "text": "**Tapping `Stop` twice can lose the hold's time.** `Start again` appears where `Stop` was, as the boards draw it, so a second tap starts a new clock. `Stopped at 1:07` goes, the Time box still reads 1:07, and `Log set` is disabled. A `Stop` more than a second later then replaces 1:07 with those few seconds, and nothing on screen still shows the old time. The third known limitation covers this mechanism through a mis-tapped `Start`, but a tired user at the end of a hold makes the double tap the likelier way in. Either ignore `Start again` for about half a second after `Stop`, which `nowMillis` lets a test hold, or name the double tap in that limitation.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:25:57Z"
+            }
+          ]
+        },
+        "F-310447a6f65a": {
+          "digest": "310447a6f65afd2054f345fd157dd66344044238c9704d469663a725dd30b826",
+          "text": "**`Back` from Home is one more path that loses a clock, on Android 9 to 11.** `minSdk` is 28 and Home has no `BackHandler`, so after `Leave it running`, `Back` finishes `MainActivity` on those versions and its saved state goes with it. From Android 12 the system only moves a root launcher activity to the back. This comes from Android's documented behaviour; I did not run it. The first known limitation and `docs/UX_FLOWS.md` should name it, since the review request asks for every path.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:25:57Z"
+            }
+          ]
+        },
+        "F-55fee219f3d4": {
+          "digest": "55fee219f3d42e6a68b55949378bc3b0baef2e57c9881219e7688cf85d41e409",
+          "text": "**A second existing test breaks in CP2, and the plan names only one.** `theTimeCardsHintSitsBelowItsTargetLine` (`ActiveWorkoutScreenTest.kt:838`) finds the lowercase `target ` caption that CP2 removes, and `hasText` is case-sensitive, so it won't find `Target 0:30–1:00`. It has nothing left to hold once the target moves to another card, so drop it rather than repoint it. The file is already in CP2's list.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:25:57Z"
+            }
+          ]
+        },
+        "F-397159c70d10": {
+          "digest": "397159c70d102e764c40ce65fc74129d7c52bc7dbc774348a1271cba342afeb2",
+          "text": "**CP2 test 11 has to allow for the card under the sheet.** Focus mode stays composed below the sheet and `onNodeWithText` reads every window, which is why the file's sheet helpers use `.onLast()` (`ActiveWorkoutScreenTest.kt:1416`). With the entry's clock running, an unscoped \"no `Clock`\" fails on the real card below it. Assert exactly one `Clock` across all windows and no `Start`, or scope the assertions to the sheet, so the mutation \"the clock drawn inside `EntrySteppers`\" is still what fails it.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:25:57Z"
+            }
+          ]
+        },
+        "F-063b11c85249": {
+          "digest": "063b11c852494fa90be305e3fb4d3742e94a47c846a03b61f4e16118914499c7",
+          "text": "**A fixed target reads two ways on one screen.** Pending rows still read `Target: 1:00-1:00` (`WorkoutFocusSets.kt:162`, `strings.xml:149`) above a card that reads `Target 1:00`, and `20o` draws the row as `1:00`. The plan fixes this wording on the Time card and lists other older differences, but not this one. Add it to that list, or have the row drop the range when its two ends match.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:25:57Z"
+            }
+          ]
+        },
+        "F-594118e9b7df": {
+          "digest": "594118e9b7dfbc76c8838146a715a2c89a04a5af94ae1942bc5c9ffa0aa9a7b2",
+          "text": "**CP3's line about the harness describes what it will be, not what it is.** `ActiveWorkoutSetEntryTest` has `onSkipRestTimer = {}` (line 144), builds `Active` with no `restTimer`, and its `exercise()` helper fixes `WEIGHT_AND_REPS`. All three are small additions to a file CP3 already lists, so nothing is blocked, but CP3 has to make them first.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:25:57Z"
+            }
+          ]
+        },
+        "F-c6c594d8d17a": {
+          "digest": "c6c594d8d17a934840bb91267b3764ad0a4f53c7482609928b69c44ff9e18f79",
+          "text": "CP2 should also retire or update `theTimeCardsHintSitsBelowItsTargetLine` in `ActiveWorkoutScreenTest.kt:838`. It searches for lowercase `target `, which the planned removal of the Time card’s caption eliminates. The plan currently names only the other affected target-caption test.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:28:50Z"
+            }
+          ]
+        },
+        "F-d28499f876c1": {
+          "digest": "d28499f876c17e1ceacb061993bceaf7436226c409618c570338a2a7adc5182e",
+          "text": "Scope CP2 test 11’s absence assertions to the correction sheet. Focus mode remains composed beneath it, so an unrestricted assertion that no `Clock` exists would find the intended card underneath.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:28:50Z"
+            }
+          ]
+        },
+        "F-25ea2c4b16a2": {
+          "digest": "25ea2c4b16a2882e6bb21b44c2ef9c975df3b1d8571466bff92c012136eceec9",
+          "text": "CP3 needs small harness additions before its tests: `ActiveWorkoutSetEntryTest` currently fixes the exercise type to `WEIGHT_AND_REPS`, supplies no rest timer, and uses an empty `onSkipRestTimer` callback. Its listed file scope already accommodates these additions.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "5b4f8445d2a51509851f35fa602b8378f20bc0d6ab41f44f7b26fb1cec92dfe0",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T18:28:50Z"
+            }
+          ]
+        }
       }
     }
   },

@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "work_item_id": "timed-set-clock",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "The entry holds the clock's start moment and stopped time (R2, R3, R4)",
+      "depends_on": [],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "The Clock card draws the boards' states (R1, R2, R3, R4, R6)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 3,
+      "session_target": "1"
+    },
+    {
+      "id": "CP3",
+      "name": "The clock survives leaving, and Start ends a rest (R4, R5)",
+      "depends_on": [
+        "CP2"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    }
+  ]
+}
