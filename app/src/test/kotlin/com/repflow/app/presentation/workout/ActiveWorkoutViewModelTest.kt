@@ -516,16 +516,16 @@ class ActiveWorkoutViewModelTest {
         }
 
     @Test
-    fun `editing the last set updates load, reps, rpe and warm-up status`() =
+    fun `editing the last set updates load, reps, rpe, warm-up status, pain and technique quality`() =
         runTest {
             seedExercise()
             Dispatchers.setMain(StandardTestDispatcher(testScheduler))
             viewModel.uiState.test {
                 val withExercise = startWorkoutWithFirstAvailableExercise()
-                viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true)
+                viewModel.onRecordSet(withExercise.id, 60.0, 8, null, 7.5, true, 1, 3)
                 awaitSingleSet()
 
-                viewModel.onEditLastSet(withExercise.id, 70.0, 5, null, 8.0, false)
+                viewModel.onEditLastSet(withExercise.id, 70.0, 5, null, 8.0, false, 2, 4)
                 var state = awaitItem()
                 while ((state.content as ActiveWorkoutContent.Active)
                         .exercises
@@ -546,6 +546,8 @@ class ActiveWorkoutViewModelTest {
                 assertEquals(5, edited.reps)
                 assertEquals(8.0, edited.rpe)
                 assertEquals(false, edited.isWarmup)
+                assertEquals(2, edited.pain)
+                assertEquals(4, edited.techniqueQuality)
                 cancelAndIgnoreRemainingEvents()
             }
         }
