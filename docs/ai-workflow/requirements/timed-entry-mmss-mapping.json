@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "work_item_id": "timed-entry-mmss",
+  "requirements": {
+    "R1": {
+      "description": "A timed set's duration is shown as m:ss everywhere a person reads it outside Progress",
+      "checkpoint_ids": [
+        "CP3"
+      ]
+    },
+    "R2": {
+      "description": "The timed set's pad is an m:ss pad: digits fill from the right, Set stores whole seconds, the field says so, and a value over the range is clamped",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    },
+    "R3": {
+      "description": "Every number pad opens on the current value, selected: first key replaces, Backspace clears, Cancel keeps, Set unchanged confirms, a rotation keeps it",
+      "checkpoint_ids": [
+        "CP1",
+        "CP2"
+      ]
+    },
+    "R4": {
+      "description": "Nothing stored changes: a timed set and a rest are whole seconds, backup and CSV keep raw seconds, the plan range and the 5 s step are as before",
+      "checkpoint_ids": [
+        "CP2",
+        "CP3"
+      ]
+    },
+    "R5": {
+      "description": "Rest is typed and shown as m:ss: the plan rest line and Settings' Other use the m:ss pad titled Rest, and the pending row, warm-up hints and plan row meta show the clock",
+      "checkpoint_ids": [
+        "CP2",
+        "CP3"
+      ]
+    },
+    "R6": {
+      "description": "The pad looks as boards 50h and 10l draw it, apart from the declared differences, and the selected value is visibly selected in both themes",
+      "checkpoint_ids": [
+        "CP1"
+      ]
+    }
+  }
+}

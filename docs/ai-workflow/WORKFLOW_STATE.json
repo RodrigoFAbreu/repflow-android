@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_work_item_id": null,
+  "active_work_item_id": "timed-entry-mmss",
   "work_items": {
     "workflow-v2-1-core": {
       "work_item_type": "process",
@@ -12618,6 +12618,331 @@
         },
         "evaluated_at": "2026-11-06T03:48:21Z",
         "workflow_release": "2.25.5"
+      }
+    },
+    "timed-entry-mmss": {
+      "work_item_type": "product",
+      "work_item_kind": "product",
+      "work_item_id": "timed-entry-mmss",
+      "parent_work_item_id": null,
+      "plan_path": "docs/milestones/timed-entry-mmss-execution.md",
+      "registry_path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
+      "mapping_path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
+      "governing_workflow_version": "2.2",
+      "phase": "IMPLEMENTING",
+      "plan_revision": 2,
+      "implementation_revision": null,
+      "functional_review_round": null,
+      "base_commit": "adec3533d6ffeb70cbc0a6fd070fdeb713b1937b",
+      "reviewed_implementation_head": null,
+      "current_checkpoint_id": null,
+      "last_completed_checkpoint_id": null,
+      "checkpoints": {},
+      "current_bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+      "plan_approval": {
+        "status": "CURRENT",
+        "basis": "POLICY_SATISFIED",
+        "reviewed_bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+        "approved_review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+        "review_content_manifest": [
+          {
+            "path": "docs/ai-workflow/registry/timed-entry-mmss-registry.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "758f421c99ebd944cd657e0901397b6a3bd69bd0"
+          },
+          {
+            "path": "docs/ai-workflow/requirements/timed-entry-mmss-mapping.json",
+            "exists": true,
+            "mode": "100644",
+            "blob": "98054ce3a090b954d0058aba7e180cd2f46b86e8"
+          },
+          {
+            "path": "docs/milestones/timed-entry-mmss-execution.md",
+            "exists": true,
+            "mode": "100644",
+            "blob": "21c544d020def28e46df3077d4c76d1358bcf185"
+          }
+        ],
+        "reviewed_content_commit": null,
+        "legacy_evidence": null,
+        "user_confirmation": "policy:bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+        "waived_guarantees": [],
+        "recorded_at": "2026-11-06T04:57:16Z",
+        "policy_evidence": {
+          "policy_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "policy_source": "adopted",
+          "file_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_digest": "1b76de4f95ab96891f46cd8d1280ca372a9754af556e0efa815a17cb3c95d3aa",
+          "adopted_at": "2026-11-04T19:09:35Z",
+          "requirements": [
+            {
+              "id": "gate_reachable",
+              "met": true,
+              "detail": "the approval gate is reachable"
+            },
+            {
+              "id": "verdict_approve_bound",
+              "met": true,
+              "detail": "the latest verdict is APPROVE and names the current bundle"
+            },
+            {
+              "id": "distinct_reviewer_models",
+              "met": true,
+              "detail": "families 'anthropic' and 'openai' differ"
+            },
+            {
+              "id": "review_evidence_audited",
+              "met": true,
+              "detail": "both stages carry the audit keys"
+            }
+          ],
+          "inputs": {
+            "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+            "ledger": {
+              "local": {
+                "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "5ccdb341323a4ccc35ec7d8c55b2906b728693ea29217f84fd4a5213ec283315",
+                "ledger_entry_sha256": "258530c25419c484ee381f54d571045d5ada3526f327fab13a9d0e482414e5f4",
+                "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+                "reviewer_model": "anthropic/claude-opus-5-5"
+              },
+              "manual": {
+                "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+                "verdict": "APPROVE",
+                "round": 2,
+                "verdict_sha256": "aba1fed97638641274416de1757c9d97ed1fb206b0fd14bf49979aca35281b09",
+                "ledger_entry_sha256": "743e96d5b87cebf689e87e4949a9137783628e6fa20747aac82bca67eb7773dd",
+                "run_ref": "codex:20261106T045302Z-d6012113",
+                "reviewer_model": "openai/gpt-6.1-sol"
+              }
+            },
+            "gate_status_digest": "208019226c6b1f204dc9cf40421b18bfb7dcdd87f3fee052ed0d7e6aa156165f"
+          },
+          "floor_digest": "bae758b4f4ce132042f656ca8ff42d47634c2abae3b005efbb3aa2c9513e56a3",
+          "trust": {
+            "review_verdicts": "orchestrator"
+          },
+          "evaluated_at": "2026-11-06T04:57:16Z",
+          "workflow_release": "2.25.5"
+        }
+      },
+      "technical_approval": null,
+      "technical_review_block_pins": [],
+      "plan_review_stages": {
+        "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+        "LOCAL_MODEL_PLAN_REVIEW": {
+          "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T04:52:35Z",
+          "verdict_sha256": "5ccdb341323a4ccc35ec7d8c55b2906b728693ea29217f84fd4a5213ec283315",
+          "run_ref": "session:local .ai-review/timed-entry-mmss/feedback/REVIEW_FEEDBACK.md",
+          "reviewer_model": "anthropic/claude-opus-5-5"
+        },
+        "MANUAL_EXTERNAL_PLAN_REVIEW": {
+          "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+          "verdict": "APPROVE",
+          "round": 2,
+          "completed_at": "2026-11-06T04:55:02Z",
+          "verdict_sha256": "aba1fed97638641274416de1757c9d97ed1fb206b0fd14bf49979aca35281b09",
+          "run_ref": "codex:20261106T045302Z-d6012113",
+          "reviewer_model": "openai/gpt-6.1-sol"
+        }
+      },
+      "functional_acceptance_status": null,
+      "blocking_decisions": [],
+      "review_round_counts": {
+        "plan": {
+          "local": 2,
+          "external": 1
+        },
+        "implementation": {
+          "local": 0,
+          "external": 0
+        }
+      },
+      "state_revision": 9,
+      "last_transition": "2026-11-06T04:57:16Z",
+      "feedback_layout": "scoped",
+      "plan_review_binding": {
+        "status": "BOUND",
+        "at": "2026-11-06T04:37:45Z",
+        "consumed": {
+          "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+          "plan_revision": 1,
+          "legacy": false
+        },
+        "published": {
+          "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+          "plan_revision": 2
+        },
+        "bound": {
+          "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+          "bundle_id": "c11c7f8d6f67e5462e1f6eb4e7deb7d30b977602244f14409fd05f6f8271d593",
+          "plan_revision": 2
+        }
+      },
+      "consumed_plan_review_content_ids": [
+        "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8"
+      ],
+      "optional_findings": {
+        "F-93365a581417": {
+          "digest": "93365a581417a4a12cebb9090dac5b58fc9477701b643734da3ebed5817f0b64",
+          "text": "**O1. A stored value can be longer than the five-digit limit.** `WorkoutSet.kt:95` only requires a positive duration, and today's pad accepts 999999 s, which seeds seven digits. R3 says `Set` unchanged confirms the same value, so a seed must not be cut to five. Add that case to `RepFlowKeypadInputTest`, and to `RepFlowDurationTest` for the clock text.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-92543df3b6f5": {
+          "digest": "92543df3b6f5b6760a619a52c5befec7c751eba278bbd21c41e33d731a14feec",
+          "text": "**O2. Name the plan editor's stepper in the font-scale look.** Its value cell is 64 dp (`LineStepperWidth` 164 minus two 44 dp buttons and two 6 dp gaps) at 16 sp. By my estimate, not measured, `120:00` wraps from about 1.3 and `15:00` by 2.0. \"The stepper value still fits\" doesn't say which stepper, and the plan doesn't say what happens if it doesn't fit.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-45301bc24bb3": {
+          "digest": "45301bc24bb3e6252a99d52cef3ce23e4a41ae55494e72feea40af25ee761006",
+          "text": "**O3. Check the TalkBack claim.** The plan says TalkBack reads the clock \"as a time\", which is untested, and `15:00` or `120:00` may not read as a duration. The wrap-up look should include TalkBack, as `safety-copy-polish` did. Two related gaps: nothing announces the selected state unless the line from I3 is built, and the Backspace description `Delete last digit` (`strings.xml:787`) is wrong when it clears a selected value.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-9229036a3e1f": {
+          "digest": "9229036a3e1f83f47e93b9c0e6150ce25dbfca50e9c15b6aa1828a79573dcdb0",
+          "text": "**O4. The pull request title says \"everywhere\", but Progress stays in seconds.** The merge publishes that title as release text. Say what's true, for example \"while logging and in History\".",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-8bd4555e414a": {
+          "digest": "8bd4555e414a9dfd101b004a44221872988abb1ec839582d819a37568c7d7d56",
+          "text": "**O5. `Longest hold` doesn't need a tick rule.** The reason for excluding Progress covers its chart, but `ProgressStatsSection.kt:195` is a plain line showing `900 s`. Either format it here or name it in the follow-up. Leaving all of Progress for one follow-up is acceptable.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 1,
+              "review_content_id": "cce993fecc7fea79bf4312210af739d70afe8a4edfd932efd4f2868f744c90f8",
+              "verdict": "REVISE",
+              "at": "2026-11-06T04:26:44Z"
+            }
+          ]
+        },
+        "F-fef72578136f": {
+          "digest": "fef72578136fe8fd85cf7d43a5c85a3cc48fb519af28500b03c2b83048c58e13",
+          "text": "**O1. The plan line's wider stepper can break `Working sets` mid-word on a narrow phone.** At font scale 2.0 the plan's 64 dp × scale makes the stepper 228 dp. After the 16 dp gutters and the 6 dp start padding, the label has 118 dp on the AVD's 384 dp screen and 94 dp on a 360 dp phone. `Working` alone needs 101 to 107 dp, so on 360 dp it would read `Workin` / `g` / `sets`, where today's 158 dp holds it. The value doesn't use the whole cell: `120:00` needs 99 to 113 dp of its 128. These are advance widths from the app's Inter files, not a render, and the lower figures use my memory of Android's non-linear scale table. The wrap-up look runs only at the AVD's width. Add one look at 360 dp wide, and if `Working` breaks, trim the cell.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-16a91855e744": {
+          "digest": "16a91855e74422406d9ad7d39659d12507ce47f80647e4f4a637f01ae0e3e5b2",
+          "text": "**O2. Three small differences from 50h and 10l aren't in the plan's table.** The weight pad stays titled `Weight` (`strings.xml:151`), where 50h and spec 60e say `Weight (kg)`. The keys keep their hairline border (`RepFlowNumericKeypad.kt:210`), where the boards draw none. Backspace stays the `⌫` character, where the boards draw the Phosphor backspace icon. R6 says every difference is declared, so CP1 should either build these or list them in its record. The title is the only one a person is likely to notice.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-fc73760c9063": {
+          "digest": "fc73760c9063c159dc1a74ee0c2d38b600286c1861de4e979ee8444d29683fec",
+          "text": "**O3. Two bookkeeping slips, neither of which changes what gets built.** R1 is mapped to CP3 alone, but CP2 draws the clock on the workout's time stepper and the plan's min and max lines, both named in R1. CP2's tests do hold those sites, so a note in CP2's record is enough. The plan also cites \"spec 60a\" for the `.` rule, the out-of-range rule and \"Rest is m:ss everywhere\". All three are on 60e, the rules moved from the archive boards.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-24da976df3cc": {
+          "digest": "24da976df3ccea462e360cff1e7f13a25241a9f5001686268c272d7af19ccf42",
+          "text": "**O4. The TalkBack look doesn't name the new label.** The wrap-up listens to the pad's value and the stepper's value. `Time (m:ss)` is also new, as the card's label and the pad's title, and a screen reader may spell it out or read it oddly. Add it and the hint to the same listen, and record what was heard.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "LOCAL_MODEL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:52:35Z"
+            }
+          ]
+        },
+        "F-3dc5b579201e": {
+          "digest": "3dc5b579201e5eebf2beefb62f95295e7202ddaa2f00b5d10d7735b4e024db15",
+          "text": "**Clarify zero-seed confirmation.** The plan’s CP1 tests say zero seeds to empty, empty confirms nothing, and every seed—including zero—confirms its original seconds (`docs/milestones/timed-entry-mmss-execution.md:193`). Those assertions conflict. Specify that an unchanged zero seed dismisses while preserving zero, or distinguish selected zero from cleared input. This does not threaten a stored positive duration.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:55:02Z"
+            }
+          ]
+        },
+        "F-2030c4c9797e": {
+          "digest": "2030c4c9797e3893ed0b33622b3cbcccdd3a0f376bd65a3fdd3f7ad889b30f82",
+          "text": "**Align requirement bookkeeping.** R1 maps only to CP3, although CP2 implements and tests its workout-stepper and plan min/max displays. Including CP2 would make the mapping reflect the planned coverage.",
+          "raised": [
+            {
+              "stage": "plan",
+              "role": "MANUAL_EXTERNAL_PLAN_REVIEW",
+              "round": 2,
+              "review_content_id": "0f0f8e5f39c67ced375b8892de367609d6e88098aa084e2163a1dc8863bf1706",
+              "verdict": "APPROVE",
+              "at": "2026-11-06T04:55:02Z"
+            }
+          ]
+        }
       }
     }
   },

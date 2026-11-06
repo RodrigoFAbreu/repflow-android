@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "work_item_id": "timed-entry-mmss",
+  "plan_revision": 2,
+  "checkpoints": [
+    {
+      "id": "CP1",
+      "name": "The m:ss formatter, and a pad drawn as 50h and 10l that opens on the current value (R2, R3, R6)",
+      "depends_on": [],
+      "complexity": 3,
+      "session_target": "1"
+    },
+    {
+      "id": "CP2",
+      "name": "Timed values and rest are typed as m:ss, and the other pads open on the current value (R2, R3, R4, R5)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    },
+    {
+      "id": "CP3",
+      "name": "Every timed duration and rest is shown as m:ss (R1, R4, R5)",
+      "depends_on": [
+        "CP1"
+      ],
+      "complexity": 2,
+      "session_target": "1"
+    }
+  ]
+}
