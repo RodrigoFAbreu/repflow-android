@@ -34,55 +34,58 @@
 | 28 | [The set correction sheet also edits RPE, technique and pain](items/set-edit-fields.md) `set-edit-fields` | Done | 1 | design-5-workout-entry |
 | 29 | [Any set in the running workout can be corrected, not just the last one](items/set-edit-any-set.md) `set-edit-any-set` | Done | 2 | set-edit-fields |
 | 30 | [A timed set has a clock: Start counts up, and Stop fills in the time](items/timed-set-clock.md) `timed-set-clock` | Done | 2 | design-5-workout-entry, timed-entry-mmss |
-| 31 | [A timed set alerts you when it reaches its target, even with the phone locked](items/timed-set-alert.md) `timed-set-alert` | Next | 1 | timed-set-clock |
-| 32 | [An exercise you didn't train keeps its real suggestion](items/suggest-keep-untouched.md) `suggest-keep-untouched` | Next | 1 | - |
-| 33 | [Top of the range with no RPE gives Maintain with the reason shown, and the \`NaN\` text goes](items/suggest-no-rpe.md) `suggest-no-rpe` | Next | 1 | - |
-| 34 | [No suggestion for timed, reps-only and single-set work](items/suggest-load-only.md) `suggest-load-only` | Next | 1 | - |
-| 35 | [Only today's check-in can hold back suggestions](items/suggest-today-checkin.md) `suggest-today-checkin` | Next | 1 | - |
-| 36 | [Futsal becomes a note; only pain or heavy legs hold back, with a true 24 h window](items/futsal-not-hold.md) `futsal-not-hold` | Next | 1 | design-1-wrong-claims |
-| 37 | [A futsal session can be removed, and a morning entry defaults to yesterday](items/futsal-fix-entry.md) `futsal-fix-entry` | Next | 2 | - |
-| 38 | [The 'not enough data' screen matches the design, with \`Keep the same load\`](items/suggest-empty-state.md) `suggest-empty-state` | Next | 1 | suggest-load-only, design-1-wrong-claims |
-| 39 | [Home offers the next plan in your list, not the one you just did](items/home-next-plan.md) `home-next-plan` | Next | 1 | - |
-| 40 | [Tapping the rest notification opens the workout, with the right icon and text](items/rest-notification-tap.md) `rest-notification-tap` | Next | 1 | - |
-| 41 | [No heads-up notification with the app open, and a stale one clears](items/rest-notification-foreground.md) `rest-notification-foreground` | Next | 1 | rest-notification-tap |
-| 42 | [Fixed targets read \`8 reps\` and \`5:00\`, not \`8-8\` and \`300-300s\`](items/fixed-target-text.md) `fixed-target-text` | Next | 1 | - |
-| 43 | [A fixed target seeds the first set, and the first \`+\` starts at the bottom of the range](items/first-set-seed.md) `first-set-seed` | Next | 1 | design-2-rules |
-| 44 | [Focus mode puts entry above the set list, and adds a previous-exercise button](items/focus-entry-first.md) `focus-entry-first` | Next | 1 | - |
-| 45 | [Focus mode gets the 'Just logged' bar with Undo, the new row format, and the RPE panel closing after \`Log set\`](items/focus-just-logged.md) `focus-just-logged` | Next | 2 | focus-entry-first, design-2-rules |
-| 46 | [Finishing with nothing logged asks first, instead of saving an empty workout](items/finish-empty-workout.md) `finish-empty-workout` | Next | 1 | - |
-| 47 | [After 4 h a workout shows its start time, and Finish ends at the last set](items/overnight-workout.md) `overnight-workout` | Next | 1 | finish-empty-workout |
-| 48 | [Hold a stepper to repeat](items/stepper-hold-repeat.md) `stepper-hold-repeat` | Next | 1 | - |
-| 49 | [Plan editor: a new exercise joins the plan, archived exercises keep their name, and an unchanged save adds no version](items/fix-plan-editor-bugs.md) `fix-plan-editor-bugs` | Next | 2 | - |
-| 50 | [Design: the new names, plans with days, and Home's workout for today](items/design-6-plans-and-days.md) `design-6-plans-and-days` | Idea | 2 | - |
-| 51 | [On screen, today's plans are called workouts](items/workout-names-on-screen.md) `workout-names-on-screen` | Next | 1 | design-6-plans-and-days |
-| 52 | [Plans can be stored: a named group of workouts with a day for each](items/plan-groups-data.md) `plan-groups-data` | Next | 2 | workout-names-on-screen |
-| 53 | [Create a plan, choose its workouts and days, and choose the active plan](items/plan-groups-screen.md) `plan-groups-screen` | Next | 2 | plan-groups-data |
-| 54 | [Home suggests the active plan's workout for today](items/home-today-workout.md) `home-today-workout` | Next | 1 | plan-groups-screen, home-next-plan |
-| 55 | [Sets in past workouts can be corrected](items/set-edit-past-workouts.md) `set-edit-past-workouts` | Next | 2 | set-edit-any-set |
-| 56 | [Text levels and control colours match the spec, including the light-theme pill](items/theme-text-levels.md) `theme-text-levels` | Next | 1 | - |
-| 57 | [Home header and cards as drawn](items/home-cards.md) `home-cards` | Next | 2 | home-next-plan |
-| 58 | [Readiness sheet as drawn, with one scale order](items/readiness-sheet.md) `readiness-sheet` | Next | 1 | - |
-| 59 | [Plans list: one list, Archived section, \`last run\`, Duplicate](items/plans-list.md) `plans-list` | Next | 2 | - |
-| 60 | [Plan editor rows: drag handle, menu, rest format and presets](items/plan-editor-rows.md) `plan-editor-rows` | Next | 2 | - |
-| 61 | [Workout board rows: \`Last time\` and logged summaries](items/workout-board-rows.md) `workout-board-rows` | Next | 1 | design-3-redraws |
-| 62 | [Done screen tiles as drawn, and stat values no longer cut off at large font](items/done-and-stat-tiles.md) `done-and-stat-tiles` | Next | 1 | - |
-| 63 | [Leave, Finish, Abandon and Discard: wording and button style; drop \`Irreversible\`](items/dialogs-and-sheets.md) `dialogs-and-sheets` | Next | 1 | - |
-| 64 | [Exercise library title and create label, and no \`Create\` on an exact match](items/library-polish.md) `library-polish` | Next | 1 | - |
-| 65 | [History: \`Clear filters\`, row and detail differences, exercise filter search](items/history-polish.md) `history-polish` | Next | 1 | - |
-| 66 | [Progress timed units, and tappable Recovery history rows](items/progress-recovery-polish.md) `progress-recovery-polish` | Next | 1 | - |
-| 67 | [Settings says when alerts are limited, with a way back after \`Not now\`](items/settings-alert-rows.md) `settings-alert-rows` | Next | 1 | design-3-redraws |
-| 68 | [Recovery chart picks a day by dragging](items/recovery-chart-scrub.md) `recovery-chart-scrub` | Next | 1 | - |
-| 69 | [Placeholder shapes instead of spinners](items/loading-placeholders.md) `loading-placeholders` | Next | 2 | design-2-rules |
-| 70 | [Rest strip spacing, Home \`Log\` flicker, Progress check marks, small visual leftovers](items/small-polish.md) `small-polish` | Next | 1 | - |
-| 71 | [Remaining copy differences](items/copy-pass.md) `copy-pass` | Next | 1 | - |
-| 72 | [Warn when changing the tracking type of an exercise in a plan or with history](items/tracking-type-warning.md) `tracking-type-warning` | Next | 1 | - |
-| 73 | [Remove the unused \`Optional\` switch from the plan editor](items/remove-optional-switch.md) `remove-optional-switch` | Next | 1 | - |
-| 74 | [Bring the product docs up to date, including the pages-win rule](items/docs-refresh.md) `docs-refresh` | Next | 1 | - |
-| 75 | [Test on the owner's phone what Samsung Health really shares through Health Connect](items/health-connect-probe.md) `health-connect-probe` | Idea | 1 | - |
-| 76 | [The check-in shows last night's sleep from Samsung Health](items/health-sleep-read.md) `health-sleep-read` | Next | 2 | health-connect-probe |
-| 77 | [A Galaxy Watch app shows the rest countdown and buzzes when rest ends](items/watch-rest-countdown.md) `watch-rest-countdown` | Next | 3 | rest-notification-foreground |
-| 78 | [The watch app shows the timed-set clock](items/watch-timed-clock.md) `watch-timed-clock` | Next | 2 | watch-rest-countdown, timed-set-alert |
-| 79 | [Remove an exercise added by mistake from a running workout (needs a small board)](items/workout-remove-exercise.md) `workout-remove-exercise` | Idea | 1 | - |
-| 80 | [Per-exercise and per-session notes](items/exercise-notes.md) `exercise-notes` | Idea | 2 | - |
-| 81 | [\`Add reps\` and \`Add time\` suggestions, if you want progression on foot and mobility work](items/suggest-reps-time.md) `suggest-reps-time` | Idea | 3 | - |
-| 82 | [Accessibility pass, including the rest-end announcement](items/accessibility-audit.md) `accessibility-audit` | Idea | 2 | - |
+| 31 | [A second quick tap on the clock's Start or Stop is ignored, so it can't store a wrong time](items/timed-set-double-tap.md) `timed-set-double-tap` | Next | 1 | - |
+| 32 | [The clock's Start and Stop stay reachable while a rest is running](items/timed-set-start-reachable.md) `timed-set-start-reachable` | Next | 1 | - |
+| 33 | [A timed set alerts you when it reaches its target, even with the phone locked](items/timed-set-alert.md) `timed-set-alert` | Next | 1 | timed-set-clock |
+| 34 | [An exercise you didn't train keeps its real suggestion](items/suggest-keep-untouched.md) `suggest-keep-untouched` | Next | 1 | - |
+| 35 | [Top of the range with no RPE gives Maintain with the reason shown, and the \`NaN\` text goes](items/suggest-no-rpe.md) `suggest-no-rpe` | Next | 1 | - |
+| 36 | [No suggestion for timed, reps-only and single-set work](items/suggest-load-only.md) `suggest-load-only` | Next | 1 | - |
+| 37 | [Only today's check-in can hold back suggestions](items/suggest-today-checkin.md) `suggest-today-checkin` | Next | 1 | - |
+| 38 | [Futsal becomes a note; only pain or heavy legs hold back, with a true 24 h window](items/futsal-not-hold.md) `futsal-not-hold` | Next | 1 | design-1-wrong-claims |
+| 39 | [Pain logged on a set holds back that exercise's next suggestion](items/set-pain-holds-suggestion.md) `set-pain-holds-suggestion` | Next | 1 | - |
+| 40 | [A futsal session can be removed, and a morning entry defaults to yesterday](items/futsal-fix-entry.md) `futsal-fix-entry` | Next | 2 | - |
+| 41 | [The 'not enough data' screen matches the design, with \`Keep the same load\`](items/suggest-empty-state.md) `suggest-empty-state` | Next | 1 | suggest-load-only, design-1-wrong-claims |
+| 42 | [Home offers the next plan in your list, not the one you just did](items/home-next-plan.md) `home-next-plan` | Next | 1 | - |
+| 43 | [Tapping the rest notification opens the workout, with the right icon and text](items/rest-notification-tap.md) `rest-notification-tap` | Next | 1 | - |
+| 44 | [No heads-up notification with the app open, and a stale one clears](items/rest-notification-foreground.md) `rest-notification-foreground` | Next | 1 | rest-notification-tap |
+| 45 | [Fixed targets read \`8 reps\` and \`5:00\`, not \`8-8\` and \`300-300s\`](items/fixed-target-text.md) `fixed-target-text` | Next | 1 | - |
+| 46 | [A fixed target seeds the first set, and the first \`+\` starts at the bottom of the range](items/first-set-seed.md) `first-set-seed` | Next | 1 | design-2-rules |
+| 47 | [Focus mode puts entry above the set list, and adds a previous-exercise button](items/focus-entry-first.md) `focus-entry-first` | Next | 1 | - |
+| 48 | [Focus mode gets the 'Just logged' bar with Undo, the new row format, and the RPE panel closing after \`Log set\`](items/focus-just-logged.md) `focus-just-logged` | Next | 2 | focus-entry-first, design-2-rules |
+| 49 | [Finishing with nothing logged asks first, instead of saving an empty workout](items/finish-empty-workout.md) `finish-empty-workout` | Next | 1 | - |
+| 50 | [After 4 h a workout shows its start time, and Finish ends at the last set](items/overnight-workout.md) `overnight-workout` | Next | 1 | finish-empty-workout |
+| 51 | [Hold a stepper to repeat](items/stepper-hold-repeat.md) `stepper-hold-repeat` | Next | 1 | - |
+| 52 | [Plan editor: a new exercise joins the plan, archived exercises keep their name, and an unchanged save adds no version](items/fix-plan-editor-bugs.md) `fix-plan-editor-bugs` | Next | 2 | - |
+| 53 | [Design: the new names, plans with days, and Home's workout for today](items/design-6-plans-and-days.md) `design-6-plans-and-days` | Idea | 2 | - |
+| 54 | [On screen, today's plans are called workouts](items/workout-names-on-screen.md) `workout-names-on-screen` | Next | 1 | design-6-plans-and-days |
+| 55 | [Plans can be stored: a named group of workouts with a day for each](items/plan-groups-data.md) `plan-groups-data` | Next | 2 | workout-names-on-screen |
+| 56 | [Create a plan, choose its workouts and days, and choose the active plan](items/plan-groups-screen.md) `plan-groups-screen` | Next | 2 | plan-groups-data |
+| 57 | [Home suggests the active plan's workout for today](items/home-today-workout.md) `home-today-workout` | Next | 1 | plan-groups-screen, home-next-plan |
+| 58 | [Sets in past workouts can be corrected](items/set-edit-past-workouts.md) `set-edit-past-workouts` | Next | 2 | set-edit-any-set |
+| 59 | [Text levels and control colours match the spec, including the light-theme pill](items/theme-text-levels.md) `theme-text-levels` | Next | 1 | - |
+| 60 | [Home header and cards as drawn](items/home-cards.md) `home-cards` | Next | 2 | home-next-plan |
+| 61 | [Readiness sheet as drawn, with one scale order](items/readiness-sheet.md) `readiness-sheet` | Next | 1 | - |
+| 62 | [Plans list: one list, Archived section, \`last run\`, Duplicate](items/plans-list.md) `plans-list` | Next | 2 | - |
+| 63 | [Plan editor rows: drag handle, menu, rest format and presets](items/plan-editor-rows.md) `plan-editor-rows` | Next | 2 | - |
+| 64 | [Workout board rows: \`Last time\` and logged summaries](items/workout-board-rows.md) `workout-board-rows` | Next | 1 | design-3-redraws |
+| 65 | [Done screen tiles as drawn, and stat values no longer cut off at large font](items/done-and-stat-tiles.md) `done-and-stat-tiles` | Next | 1 | - |
+| 66 | [Leave, Finish, Abandon and Discard: wording and button style; drop \`Irreversible\`](items/dialogs-and-sheets.md) `dialogs-and-sheets` | Next | 1 | - |
+| 67 | [Exercise library title and create label, and no \`Create\` on an exact match](items/library-polish.md) `library-polish` | Next | 1 | - |
+| 68 | [History: \`Clear filters\`, row and detail differences, exercise filter search](items/history-polish.md) `history-polish` | Next | 1 | - |
+| 69 | [Progress timed units, and tappable Recovery history rows](items/progress-recovery-polish.md) `progress-recovery-polish` | Next | 1 | - |
+| 70 | [Settings says when alerts are limited, with a way back after \`Not now\`](items/settings-alert-rows.md) `settings-alert-rows` | Next | 1 | design-3-redraws |
+| 71 | [Recovery chart picks a day by dragging](items/recovery-chart-scrub.md) `recovery-chart-scrub` | Next | 1 | - |
+| 72 | [Placeholder shapes instead of spinners](items/loading-placeholders.md) `loading-placeholders` | Next | 2 | design-2-rules |
+| 73 | [Rest strip spacing, Home \`Log\` flicker, Progress check marks, small visual leftovers](items/small-polish.md) `small-polish` | Next | 1 | - |
+| 74 | [Remaining copy differences](items/copy-pass.md) `copy-pass` | Next | 1 | - |
+| 75 | [Warn when changing the tracking type of an exercise in a plan or with history](items/tracking-type-warning.md) `tracking-type-warning` | Next | 1 | - |
+| 76 | [Remove the unused \`Optional\` switch from the plan editor](items/remove-optional-switch.md) `remove-optional-switch` | Next | 1 | - |
+| 77 | [Bring the product docs up to date, including the pages-win rule](items/docs-refresh.md) `docs-refresh` | Next | 1 | - |
+| 78 | [Test on the owner's phone what Samsung Health really shares through Health Connect](items/health-connect-probe.md) `health-connect-probe` | Idea | 1 | - |
+| 79 | [The check-in shows last night's sleep from Samsung Health](items/health-sleep-read.md) `health-sleep-read` | Next | 2 | health-connect-probe |
+| 80 | [A Galaxy Watch app shows the rest countdown and buzzes when rest ends](items/watch-rest-countdown.md) `watch-rest-countdown` | Next | 3 | rest-notification-foreground |
+| 81 | [The watch app shows the timed-set clock](items/watch-timed-clock.md) `watch-timed-clock` | Next | 2 | watch-rest-countdown, timed-set-alert |
+| 82 | [Remove an exercise added by mistake from a running workout (needs a small board)](items/workout-remove-exercise.md) `workout-remove-exercise` | Idea | 1 | - |
+| 83 | [Per-exercise and per-session notes](items/exercise-notes.md) `exercise-notes` | Idea | 2 | - |
+| 84 | [\`Add reps\` and \`Add time\` suggestions, if you want progression on foot and mobility work](items/suggest-reps-time.md) `suggest-reps-time` | Idea | 3 | - |
+| 85 | [Accessibility pass, including the rest-end announcement](items/accessibility-audit.md) `accessibility-audit` | Idea | 2 | - |
