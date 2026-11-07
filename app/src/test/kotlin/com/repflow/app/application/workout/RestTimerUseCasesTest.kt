@@ -84,4 +84,17 @@ class RestTimerUseCasesTest {
             assertTrue(result is DomainResult.Success)
             assertNull(repository.findById(sessionId)!!.restTimer)
         }
+
+    @Test
+    fun `skip rest timer with none running succeeds and writes nothing`() =
+        runTest {
+            startSession(StartWorkoutSessionCommand(trainingPlanVersionId = null))
+            val sessionId = activeSessionId()
+            repository.nextUpdateFailure = WorkoutPersistenceError.Unavailable
+
+            val result = SkipRestTimer(repository)(sessionId)
+
+            assertTrue(result is DomainResult.Success)
+            assertEquals("A write would have used this failure up", WorkoutPersistenceError.Unavailable, repository.nextUpdateFailure)
+        }
 }

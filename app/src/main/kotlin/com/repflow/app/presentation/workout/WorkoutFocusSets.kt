@@ -335,7 +335,6 @@ internal fun SetCorrectionContent(
             onSecondsChange = { seconds = it.toPlainString() },
             loadStep = exercise.loadStep(),
             repRange = null,
-            durationRange = null,
         )
         Spacer(modifier = Modifier.height(RepFlowSpacing.gapMd))
         SetDetailRows(

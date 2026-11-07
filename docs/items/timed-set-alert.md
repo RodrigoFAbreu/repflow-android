@@ -12,6 +12,8 @@ One milestone and one squash-merged pull request, releasable alone: the plan's p
 
 When the clock reaches the target, buzz and sound the same way the rest timer ends, following the same Settings. For a target range, alert at the bottom of the range. The clock keeps counting after the alert. Reuse the rest timer's alarm path; don't add a second one if that path can carry it.
 
+`timed-set-clock` already changes the card past the target (`20o`, `20p`), so that isn't this item's. This item adds the buzz, the sound and the notification, and puts `· alerts at 0:30` back on the range's line before Start and while running, as `20p` draws it. That text was left out because no alert existed yet.
+
 ## Rules
 
 The plan's header must carry exactly one line of this form, with nothing after the closing backtick: ``Pull request title: `feat: what changed` ``. See `AGENTS.md`, "Running under the Controller".

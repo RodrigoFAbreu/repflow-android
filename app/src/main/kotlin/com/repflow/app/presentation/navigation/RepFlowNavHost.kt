@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -28,6 +29,7 @@ import com.repflow.app.presentation.settings.SettingsRoute
 import com.repflow.app.presentation.trainingplan.editor.TrainingPlanEditorRoute
 import com.repflow.app.presentation.trainingplan.list.TrainingPlanListRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
+import com.repflow.app.presentation.workout.FocusEntries
 import com.repflow.app.presentation.workout.WorkoutDoneRoute
 
 private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTINATIONS.map { it.route }.toSet()
@@ -52,9 +54,15 @@ private val TOP_LEVEL_ROUTES: Set<String> = RepFlowDestinations.TOP_LEVEL_DESTIN
  * "Create" and "edit" share one [ExerciseEditorRoute] destination each because the ViewModel itself distinguishes the two
  * modes from the presence of the `exerciseId` `SavedStateHandle` argument
  * (see [ExerciseEditorMode]).
+ *
+ * The workout's unlogged entries are held here, above the [NavHost], because
+ * [leaveWorkoutForHome] removes the workout's entry from the back stack and `Resume`
+ * opens a new one, and a timed set's running clock has to survive that.
+ * Navigation's own `saveState` would also bring back the leave sheet.
  */
 @Composable
 fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
+    val focusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() }
     val currentRoute =
         navController
             .currentBackStackEntryAsState()
@@ -180,6 +188,7 @@ fun RepFlowNavHost(navController: NavHostController = rememberNavController()) {
                     .getStateFlow<String?>(RepFlowDestinations.CREATED_EXERCISE_KEY, null)
                     .collectAsStateWithLifecycle()
                 ActiveWorkoutRoute(
+                    focusEntries = focusEntries,
                     createdExerciseId = createdExerciseId,
                     onCreatedExerciseHandled = { entry.savedStateHandle[RepFlowDestinations.CREATED_EXERCISE_KEY] = null },
                     onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },

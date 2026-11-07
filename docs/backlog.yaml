@@ -170,7 +170,7 @@ items:
     detail: docs/items/set-edit-any-set.md
   - id: timed-set-clock
     title: "A timed set has a clock: Start counts up, and Stop fills in the time"
-    status: next
+    status: done
     order: 30
     size: 2
     depends_on: [design-5-workout-entry, timed-entry-mmss]

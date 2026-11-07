@@ -81,9 +81,9 @@ import java.math.BigDecimal
  * / elapsed / `Finish`; `Exercise N of M`, the name and `X of Y sets done`;
  * technique notes when the exercise has them; the set list (logged sets, then
  * the planned sets still to log); `Last:` and `Undo last`; the suggestion
- * strip; the steppers; the RPE / pain / technique disclosure; the type note;
- * the warm-up chip; then the shared rest strip and the pinned bar - `Log set`
- * and `Next ›`.
+ * strip; a timed exercise's clock; the steppers; the RPE / pain / technique
+ * disclosure; the type note; the warm-up chip; then the shared rest strip and the
+ * pinned bar - `Log set` and `Next ›`.
  *
  * **The planned-target chips are gone.** Warm-up and working progress are
  * the header's `X of Y sets done`; the rep or duration range and the planned
@@ -106,6 +106,8 @@ internal fun WorkoutFocus(
     onEditSet: (WorkoutExerciseId, WorkoutSetId, Double?, Int?, Int?, Double?, Boolean, Int?, Int?) -> Unit,
     restStrip: @Composable () -> Unit,
     snackbarHostState: SnackbarHostState,
+    nowMillis: () -> Long = System::currentTimeMillis,
+    onClockStarted: () -> Unit = {},
 ) {
     // [entry] is held above focus mode (GF-1), already seeded when first created, so a reopened exercise
     // keeps what was typed and never flashes empty steppers.
@@ -148,6 +150,15 @@ internal fun WorkoutFocus(
                         onWhyClick = { onOpenRecommendation(exerciseId) },
                     )
                 }
+                // Its own card, not part of `EntrySteppers`, which the correction sheet also draws (`20i` has no clock).
+                if (exercise.trackingType == ExerciseTrackingType.DURATION) {
+                    TimedSetClockCard(
+                        entry = entry,
+                        target = exercise.plannedTarget?.durationRangeSeconds,
+                        nowMillis = nowMillis,
+                        onClockStarted = onClockStarted,
+                    )
+                }
                 EntrySteppers(
                     trackingType = exercise.trackingType,
                     load = entry.load,
@@ -158,7 +169,7 @@ internal fun WorkoutFocus(
                     onSecondsChange = entry::enterSeconds,
                     loadStep = exercise.loadStep(),
                     repRange = exercise.plannedTarget?.repRange,
-                    durationRange = exercise.plannedTarget?.durationRangeSeconds,
+                    filledFromClock = entry.filledFromClock,
                 )
                 when (content.extraSetFields) {
                     ExtraSetFields.COLLAPSED -> {

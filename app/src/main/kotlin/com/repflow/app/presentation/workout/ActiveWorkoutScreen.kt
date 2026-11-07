@@ -107,10 +107,18 @@ import com.repflow.app.presentation.progression.reasonAfterDash
  * failure can show again. The state lives here, above both modes, so a message
  * carries across a switch between them; each mode draws the host on its scroll
  * area's bottom edge, which keeps it clear of the rest strip and `Log set`.
+ *
+ * **A timed set's `Start` ends a rest** (`20r`): the next set has begun. [onClockStarted]
+ * goes on every `Start`, whatever this screen shows, because a `Log set` still saving, or
+ * just saved, has started a rest that hasn't reached this screen. What it ends is decided
+ * in action order. `Stop` never starts or ends one, and the next rest starts after `Log set`.
+ *
+ * [focusEntries] holds each exercise's unlogged entry. The route is given one that
+ * outlives this destination; the default, for a screen shown alone, lives with it.
  */
 @Suppress("LongParameterList")
 @Composable
-fun ActiveWorkoutScreen(
+internal fun ActiveWorkoutScreen(
     uiState: ActiveWorkoutUiState,
     dayContext: WorkoutDayContextUi?,
     focusedExerciseId: WorkoutExerciseId?,
@@ -135,6 +143,8 @@ fun ActiveWorkoutScreen(
     onWorkoutFinished: (WorkoutSessionId) -> Unit = {},
     keepScreenAwake: Boolean = false,
     confirmBeforeFinishing: Boolean? = true,
+    focusEntries: FocusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() },
+    onClockStarted: () -> Unit = {},
 ) {
     LaunchedEffect(finish) {
         if (finish is WorkoutFinishState.Finished) onWorkoutFinished(finish.sessionId)
@@ -186,6 +196,8 @@ fun ActiveWorkoutScreen(
                     raiseFinishFromHome = raiseFinishFromHome,
                     confirmBeforeFinishing = confirmBeforeFinishing,
                     snackbarHostState = snackbarHostState,
+                    focusEntries = focusEntries,
+                    onClockStarted = onClockStarted,
                 )
             }
 
@@ -283,6 +295,8 @@ private fun WorkoutMode(
     raiseFinishFromHome: Boolean,
     confirmBeforeFinishing: Boolean?,
     snackbarHostState: SnackbarHostState,
+    focusEntries: FocusEntries,
+    onClockStarted: () -> Unit,
 ) {
     var overlay by rememberSaveable { mutableStateOf(initialOverlay(raiseFinishFromHome, confirmBeforeFinishing)) }
     HomeFinishRequestEffect(
@@ -308,13 +322,15 @@ private fun WorkoutMode(
         if (focused != null) onFocusExercise(null) else overlay = WorkoutOverlay.LEAVE_SHEET
     }
 
-    // One unlogged entry per exercise, held here so it survives the Board and Next / Previous (GF-1).
-    val entries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() }
+    // The holder outlives this destination, so an earlier workout's entries are dropped once a new one opens.
+    LaunchedEffect(content.sessionId) {
+        focusEntries.retainOnly(content.exercises.mapTo(HashSet()) { it.id.value })
+    }
     if (focused != null) {
         WorkoutFocus(
             content = content,
             exercise = focused,
-            entry = entries.entryFor(focused.id.value, focused.seed),
+            entry = focusEntries.entryFor(focused.id.value, focused.seed),
             recommendation =
                 focused.exerciseId?.let { exerciseId ->
                     availableExercises.find { it.id == exerciseId }?.recommendation
@@ -332,6 +348,7 @@ private fun WorkoutMode(
             onEditSet = onEditSet,
             restStrip = restStrip,
             snackbarHostState = snackbarHostState,
+            onClockStarted = onClockStarted,
         )
     } else {
         WorkoutBoard(

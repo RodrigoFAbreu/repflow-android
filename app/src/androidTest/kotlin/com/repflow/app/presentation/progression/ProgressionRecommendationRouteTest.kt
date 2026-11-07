@@ -3,6 +3,7 @@ package com.repflow.app.presentation.progression
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescriptionExactly
@@ -67,6 +68,7 @@ import com.repflow.app.presentation.RepFlowTheme
 import com.repflow.app.presentation.navigation.RepFlowDestinations
 import com.repflow.app.presentation.workout.ActiveWorkoutRoute
 import com.repflow.app.presentation.workout.ActiveWorkoutViewModel
+import com.repflow.app.presentation.workout.FocusEntries
 import com.repflow.app.presentation.workout.RestNotificationCanceller
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -268,9 +270,11 @@ class ProgressionRecommendationRouteTest {
         composeRule.setContent {
             RepFlowTheme {
                 val navController = rememberNavController()
+                val focusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() }
                 NavHost(navController = navController, startDestination = RepFlowDestinations.WORKOUT) {
                     composable(RepFlowDestinations.WORKOUT) {
                         ActiveWorkoutRoute(
+                            focusEntries = focusEntries,
                             onOpenRecommendation = { id -> navController.navigate(RepFlowDestinations.progressionRoute(id.value)) },
                             onCreateExercise = {},
                             onLeaveWorkout = {},

@@ -82,14 +82,16 @@ import java.math.BigDecimal
  */
 
 /**
- * RPE, pain, technique and the warm-up flag as they stood when `Log set` was
- * tapped: what [SetEntryState.clearAfterSet] may clear once that save succeeds.
+ * RPE, pain, technique, the warm-up flag and the clock's stopped time as they
+ * stood when `Log set` was tapped: what [SetEntryState.clearAfterSet] may clear
+ * once that save succeeds.
  */
 internal data class SubmittedDetail(
     val rpe: Int?,
     val pain: Int?,
     val technique: Int?,
     val isWarmup: Boolean,
+    val clockStoppedSeconds: Long?,
 )
 
 /**
@@ -109,8 +111,16 @@ internal data class SubmittedDetail(
  * the seed ([applySeed]); once set it never takes one again. Saved state, so a
  * rotation or process death cannot turn a typed entry back into an untouched one;
  * [clearAfterSet] leaves it alone.
+ *
+ * The set clock (`20o`, `20p`) sits here because [stopClock] fills [seconds].
+ * [clockStartedAtMillis] is a start moment, never a running count, so
+ * [elapsedSeconds] comes from the wall clock each time it is read, and locking
+ * the phone or a restore loses nothing. [clockStoppedSeconds] is the time it last
+ * stopped at, until it starts again or a set saves. Like the rest of the entry,
+ * neither is written to Room: they live in saved state only.
  */
 @Stable
+@Suppress("TooManyFunctions")
 internal class SetEntryState {
     var load by mutableStateOf<BigDecimal?>(null)
         private set
@@ -124,6 +134,14 @@ internal class SetEntryState {
     var isWarmup by mutableStateOf(false)
     var touched by mutableStateOf(false)
         private set
+    var clockStartedAtMillis by mutableStateOf<Long?>(null)
+        private set
+    var clockStoppedSeconds by mutableStateOf<Long?>(null)
+        private set
+
+    /** Whether [seconds] still holds the time the clock stopped at, rather than one changed since. */
+    val filledFromClock: Boolean
+        get() = clockStoppedSeconds?.let { seconds?.compareTo(BigDecimal.valueOf(it)) == 0 } ?: false
 
     /** The user typed or stepped the weight. */
     fun enterLoad(value: BigDecimal) {
@@ -164,32 +182,76 @@ internal class SetEntryState {
         touched = true
     }
 
+    /** Starts the clock at [nowMillis] and forgets the last stop. A clock already running keeps its start moment. */
+    fun startClock(nowMillis: Long) {
+        if (clockStartedAtMillis != null) return
+        clockStartedAtMillis = nowMillis
+        clockStoppedSeconds = null
+    }
+
+    /**
+     * The running clock's whole seconds at [nowMillis], `0` when none runs. Never
+     * negative, because a wall clock set back can put [nowMillis] before the start.
+     */
+    fun elapsedSeconds(nowMillis: Long): Long {
+        val start = clockStartedAtMillis ?: return 0
+        return ((nowMillis - start) / MILLIS_PER_SECOND).coerceAtLeast(0)
+    }
+
+    /**
+     * Stops the clock and fills [seconds] with the elapsed time, which also sets
+     * [touched], so a later seed can't replace it. Under one second it only clears
+     * the clock: `0:00` would claim a time that was never measured. The cap is there
+     * because the value is later read with `toInt()`.
+     */
+    fun stopClock(nowMillis: Long) {
+        val elapsed = elapsedSeconds(nowMillis).coerceAtMost(Int.MAX_VALUE.toLong())
+        clockStartedAtMillis = null
+        if (elapsed < 1) return
+        enterSeconds(BigDecimal.valueOf(elapsed))
+        clockStoppedSeconds = elapsed
+    }
+
     /**
      * Whether `Log set` can succeed for [trackingType] (functional review GF-3,
      * design `8d`): a weight & reps exercise needs **both** a weight and reps -
      * `0` is an explicit weight and counts, an empty value does not; reps-only
      * needs reps and a timed exercise needs seconds. It gates logging only:
-     * sets already stored with no weight stay valid.
+     * sets already stored with no weight stay valid. A running clock blocks it
+     * whatever the type (`20o`), because the time isn't filled in until `Stop`.
      */
     fun canLog(trackingType: ExerciseTrackingType): Boolean =
-        when (trackingType) {
-            ExerciseTrackingType.DURATION -> (seconds?.signum() ?: 0) > 0
-            ExerciseTrackingType.REPS_ONLY -> (reps?.signum() ?: 0) > 0
-            ExerciseTrackingType.WEIGHT_AND_REPS -> load != null && (reps?.signum() ?: 0) > 0
-        }
+        clockStartedAtMillis == null &&
+            when (trackingType) {
+                ExerciseTrackingType.DURATION -> (seconds?.signum() ?: 0) > 0
+                ExerciseTrackingType.REPS_ONLY -> (reps?.signum() ?: 0) > 0
+                ExerciseTrackingType.WEIGHT_AND_REPS -> load != null && (reps?.signum() ?: 0) > 0
+            }
 
-    fun submittedDetail(): SubmittedDetail = SubmittedDetail(rpe, pain, technique, isWarmup)
+    fun submittedDetail(): SubmittedDetail = SubmittedDetail(rpe, pain, technique, isWarmup, clockStoppedSeconds)
 
     fun clearAfterSet(submitted: SubmittedDetail) {
         if (rpe == submitted.rpe) rpe = null
         if (pain == submitted.pain) pain = null
         if (technique == submitted.technique) technique = null
         if (isWarmup == submitted.isWarmup) isWarmup = false
+        if (clockStoppedSeconds == submitted.clockStoppedSeconds) clockStoppedSeconds = null
     }
 
-    /** The plain, bundle-safe form [Saver] and [FocusEntries.Saver] persist. */
+    /** The plain, bundle-safe form [Saver] and [FocusEntries.Saver] persist. New values go last: see [fromSaved]. */
     fun toSaved(): ArrayList<Any?> =
-        arrayListOf(load?.toPlainString(), reps?.toPlainString(), seconds?.toPlainString(), rpe, pain, technique, isWarmup, touched)
+        arrayListOf(
+            load?.toPlainString(),
+            reps?.toPlainString(),
+            seconds?.toPlainString(),
+            rpe,
+            pain,
+            technique,
+            isWarmup,
+            touched,
+            clockStartedAtMillis,
+            clockStoppedSeconds,
+        )
 
     companion object {
         val Saver: Saver<SetEntryState, Any> =
@@ -208,6 +270,9 @@ internal class SetEntryState {
                 technique = saved[INDEX_TECHNIQUE] as Int?
                 isWarmup = saved[INDEX_WARMUP] as Boolean
                 touched = saved[INDEX_TOUCHED] as Boolean
+                // A list saved by an older build ends before these, and restores with no clock.
+                clockStartedAtMillis = saved.getOrNull(INDEX_CLOCK_STARTED) as Long?
+                clockStoppedSeconds = saved.getOrNull(INDEX_CLOCK_STOPPED) as Long?
             }
 
         private const val INDEX_LOAD = 0
@@ -218,6 +283,9 @@ internal class SetEntryState {
         private const val INDEX_TECHNIQUE = 5
         private const val INDEX_WARMUP = 6
         private const val INDEX_TOUCHED = 7
+        private const val INDEX_CLOCK_STARTED = 8
+        private const val INDEX_CLOCK_STOPPED = 9
+        private const val MILLIS_PER_SECOND = 1000L
     }
 }
 
@@ -225,10 +293,12 @@ internal class SetEntryState {
  * Every exercise's unlogged [SetEntryState], held above focus mode (functional
  * review GF-1). Focus mode leaves composition when the Board shows and
  * re-keys on Next / Previous, so an entry remembered inside it was lost
- * with it; held here, each exercise keeps what was typed or stepped for as long
- * as the workout screen is up, and saved across a rotation. The seed rules are
- * unchanged: [entryFor] seeds an entry only when it is first created, and
- * [SetEntryState.applySeed] still never overwrites a touched one.
+ * with it. `RepFlowNavHost` holds this above the `NavHost`, because leaving for
+ * Home removes the workout's destination and the leave sheet promises a running
+ * clock keeps running: each exercise keeps what was typed, stepped or timed, and
+ * saved across a rotation. The seed rules are unchanged: [entryFor] seeds an entry
+ * only when it is first created, and [SetEntryState.applySeed] still never
+ * overwrites a touched one.
  */
 @Stable
 internal class FocusEntries(
@@ -241,6 +311,11 @@ internal class FocusEntries(
         exerciseId: String,
         seed: SetEntrySeed?,
     ): SetEntryState = entries.getOrPut(exerciseId) { SetEntryState().also { it.applySeed(seed) } }
+
+    /** Drops every entry but [exerciseIds]'s, so a holder that outlives a workout doesn't keep growing. */
+    fun retainOnly(exerciseIds: Set<String>) {
+        entries.keys.retainAll(exerciseIds)
+    }
 
     companion object {
         val Saver: Saver<FocusEntries, Any> =
@@ -268,6 +343,10 @@ internal class FocusEntries(
  * or a `Column` by width would give each its own saved state, so a phone that
  * crosses the width as it rotates would lose an open pad's entry and bring it
  * back later, out of date.
+ *
+ * [filledFromClock] picks the Time card's hint. The clock itself is
+ * `TimedSetClockCard`, drawn by focus mode, because the correction sheet draws these
+ * cards too and `20i` has no clock.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -281,8 +360,8 @@ internal fun EntrySteppers(
     onSecondsChange: (BigDecimal) -> Unit,
     loadStep: BigDecimal,
     repRange: IntRange?,
-    durationRange: LongRange?,
     modifier: Modifier = Modifier,
+    filledFromClock: Boolean = false,
 ) {
     val cardGap = RepFlowSpacing.gapMd
     Layout(
@@ -291,7 +370,7 @@ internal fun EntrySteppers(
                 WeightCard(load, onLoadChange, loadStep)
             }
             if (trackingType == ExerciseTrackingType.DURATION) {
-                SecondsCard(seconds, onSecondsChange, durationRange)
+                SecondsCard(seconds, onSecondsChange, filledFromClock)
             } else {
                 RepsCard(reps, onRepsChange, repRange)
             }
@@ -383,20 +462,18 @@ private fun RepsCard(
 private fun SecondsCard(
     seconds: BigDecimal?,
     onSecondsChange: (BigDecimal) -> Unit,
-    durationRange: LongRange?,
+    filledFromClock: Boolean,
 ) {
     val label = stringResource(R.string.workout_active_duration_label)
     StepperCard(
         label = label,
-        caption =
-            durationRange?.let {
-                stringResource(
-                    R.string.workout_focus_seconds_target,
-                    formatDuration(it.first),
-                    formatDuration(it.last),
-                )
+        caption = null,
+        hint =
+            if (filledFromClock) {
+                stringResource(R.string.workout_focus_time_hint_from_clock)
+            } else {
+                stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong()))
             },
-        hint = stringResource(R.string.workout_focus_time_hint, formatDuration(SECONDS_STEP.toLong())),
     ) {
         RepFlowStepper(
             value = seconds,

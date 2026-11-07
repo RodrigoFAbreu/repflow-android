@@ -2,6 +2,7 @@ package com.repflow.app.presentation.workout
 
 import androidx.activity.ComponentActivity
 import androidx.annotation.StringRes
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
@@ -164,6 +165,7 @@ class ActiveWorkoutErrorRouteTest {
         composeRule.setContent {
             RepFlowTheme {
                 ActiveWorkoutRoute(
+                    focusEntries = rememberSaveable(saver = FocusEntries.Saver) { FocusEntries() },
                     onOpenRecommendation = {},
                     onCreateExercise = {},
                     onLeaveWorkout = {},

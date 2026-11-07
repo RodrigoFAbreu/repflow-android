@@ -136,6 +136,14 @@ The user can:
   warm-up mark clear. A new exercise starts from last session's last working
   set (empty for one never done). `Log set` stays disabled until reps (or
   seconds) are present. `Undo last` corrects a mistaken set
+- Time a timed exercise with the `Clock` card above its time: `Start` counts up
+  in m:ss with the target in view, and the card changes when the target is
+  reached, or the bottom of a range, while it keeps counting. `Log set` waits for
+  `Stop`. `Stop` fills the time in, where it can still be changed before `Log
+  set`, and never logs a set. A stop under one second leaves the time as it was.
+  Once a set has saved, the clock is back at `0:00` with `Start` offered and the
+  time stays for the next set. Typing or stepping a time still works without it.
+  A logged set's correction sheet has no clock
 - Record RPE
 - Record optional technique quality
 - Record optional pain
@@ -170,6 +178,12 @@ After saving a set, while Settings' `Start rest timer automatically` is on:
 Returning to the application reconstructs the timer from the stored end
 timestamp.
 
+A timed set's `Start` and `Start again` end a running rest, or a `Rest done`
+still showing: the next set has begun, so the strip goes and its alert is
+cancelled. That includes the rest of a `Log set` still saving, which hasn't
+reached the screen yet. `Stop` never starts a rest; the next one starts after
+`Log set`.
+
 ## Interrupted workout
 
 When the application is reopened and an incomplete workout exists, the home
@@ -181,6 +195,16 @@ screen prominently offers:
   and its logged sets stay stored; nothing is deleted
 
 The workout resumes at the correct exercise, set, values and rest state.
+
+Leaving for Home (`Leave it running and go Home`) keeps a timed set's running
+clock, and what was typed but not logged: `Resume` opens the Board, and opening
+the exercise shows the clock still counting from its start time. The clock is
+kept in the activity's saved state, not in the database, so it also survives a
+rotation, locking the phone, switching apps and the system ending the process.
+It doesn't survive what discards saved state: swiping the app away from recents,
+a force stop, a device restart, or on Android 9 to 11 `Back` from Home, which closes
+the app there. It may not survive a crash or an app update. The workout itself comes
+back from the database, and `Start` is offered again with no message.
 
 ## Complete workout
 
@@ -198,6 +222,10 @@ screen shows:
   `IMPROVEMENT_ROADMAP.md` §9.7)*
 - Optional workout notes *(declared intent — no notes field exists;
   `IMPROVEMENT_ROADMAP.md` §9.3)*
+
+Only logged sets are saved. A timed set's clock still running at `Finish`, or at
+`Next ›` on the last exercise, goes with no message, as a typed but unlogged entry
+does.
 
 The completed workout becomes historical data and must not be changed by later
 training-plan edits.
