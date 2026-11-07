@@ -1,0 +1,79 @@
+{
+  "dispositions": {
+    "F-063b11c85249": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/blob/main/docs/items/fixed-target-text.md",
+      "note": "The pending rows of a fixed-target timed set still read `Target: 1:00-1:00` above a card reading `Target 1:00`, and `fixed-target-text` is queued to fix the wording."
+    },
+    "F-13871ba355d6": {
+      "disposition": "dropped",
+      "reason": "The card stopped past its target does show the plain time and hairline, so a user sees the right look and only a test for that case is missing."
+    },
+    "F-1966bcfe1c33": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "With a rest showing and four or more set rows, `Start` sits mostly behind the rest strip until the user swipes up to it, and nothing scrolls it into view."
+    },
+    "F-25ea2c4b16a2": {
+      "disposition": "fixed"
+    },
+    "F-310447a6f65a": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "On Android 9 to 11, `Back` from Home after `Leave it running` closes the app and a running clock comes back as `Start` with no message; it is only written in `docs/UX_FLOWS.md`."
+    },
+    "F-397159c70d10": {
+      "disposition": "fixed"
+    },
+    "F-55fee219f3d4": {
+      "disposition": "fixed"
+    },
+    "F-594118e9b7df": {
+      "disposition": "fixed"
+    },
+    "F-7a2703e61872": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/blob/main/docs/items/rest-notification-foreground.md",
+      "note": "A rest that ends with the app open still posts a notification and an old one is not cleared, which is older than this item and already queued as `rest-notification-foreground`."
+    },
+    "F-8a81612d01e5": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "The clock is not saved in the database, so a running clock lost to a swipe-away, force stop or phone restart comes back as `Start` with no message; the owner has not answered the plan's question."
+    },
+    "F-9cff4749da27": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "`Finish`, or `Next \u203a` on the last exercise, with a clock running drops the hold with no warning; it is only written in `docs/UX_FLOWS.md`."
+    },
+    "F-a3748b814562": {
+      "disposition": "fixed"
+    },
+    "F-ad94b58185f4": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "A double tap on `Stop` starts a new clock and a later `Stop` replaces the right time with a wrong one that `Log set` stores, and a double tap on `Start` during a rest ends the rest and leaves `Start`."
+    },
+    "F-c6c594d8d17a": {
+      "disposition": "fixed"
+    },
+    "F-c7af69eff8ac": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "A mis-tapped `Start` cannot be cancelled, and the `Stop` that must follow replaces any time typed or stopped earlier with the few seconds just held."
+    },
+    "F-ccaf122f057f": {
+      "disposition": "follow-up",
+      "link": "https://github.com/RodrigoFAbreu/repflow-android/issues/51",
+      "note": "Tapping `Stop` twice starts a new clock with `Stopped at` gone and `Log set` disabled, and the next `Stop` replaces the stopped time; the plan only named it in the known limits."
+    },
+    "F-d28499f876c1": {
+      "disposition": "fixed"
+    },
+    "F-dca56f016c0f": {
+      "disposition": "fixed"
+    }
+  },
+  "schema_version": 1,
+  "work_item_id": "timed-set-clock"
+}

@@ -1,8 +1,12 @@
 # Active Milestone
 
-## `timed-set-clock` — in progress
+## `timed-set-clock` — complete (accepted by policy 2026-11-07)
 
-A timed set has a clock: Start counts up, and Stop fills in the time. Plan: `docs/milestones/timed-set-clock-execution.md`.
+A timed set has a clock: Start counts up, and Stop fills in the time. Accepted by the gate policy, not by a person; the plan is archived at `docs/milestones/completed/timed-set-clock-execution.md` and the Optional findings at `docs/milestones/completed/timed-set-clock-findings.md`.
+
+**Next action:** `timed-set-alert`, A timed set alerts you when it reaches its target, even with the phone locked. Ready for `/milestone-plan`.
+
+The sections below are this milestone's historical record.
 
 - **CP1, complete.** `SetEntryState` now holds the clock: `clockStartedAtMillis`, a start moment and never a running count, and `clockStoppedSeconds`, the time it last stopped at. Both are read-only from outside. `startClock`, `elapsedSeconds` and `stopClock` take the time as an argument, and `filledFromClock` says whether `seconds` still holds the stopped time. `stopClock` fills in the elapsed whole seconds through `enterSeconds`, capped at `Int.MAX_VALUE`. Under one second it only clears the clock. `canLog` is false while a clock runs, whatever the tracking type. `SubmittedDetail` gains the stopped time, and `clearAfterSet` clears it by the rule RPE, pain and technique follow. Both values go last in the saved form and are read with `getOrNull`, so a list saved by an older build restores with no clock. Nothing on screen calls the clock yet, so the screen behaves as it did until CP2. No schema change and no new dependency. Verified: `spotlessCheck` (up to date on these bytes, from a run that passed), `detekt` (forced), and 138 JVM tests (the `presentation.workout` package and `LayerBoundaryTest`), with `SetEntryStateTest` at 36, 21 of them new. The full runs are still to come, in the wrap-up.
 
