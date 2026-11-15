@@ -49,7 +49,8 @@ targetSdk 37
 CI runs Test for pull requests and main pushes, then calls Build and publish
 after successful main validation. CI, Test and Build and publish each support
 manual dispatch. Test and Build and publish also support reusable calls.
-Direct manual publication runs Test first and requires main. The existing
+CI dispatches from main validate first and then publish. Direct Build and publish
+dispatch performs publication work on main. The existing
 Controller release transaction and APK signing policy apply. Manual publication
 uses the repository's REPFLOW_DEBUG_KEYSTORE_B64 Secret.
 
