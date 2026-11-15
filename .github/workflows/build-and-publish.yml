@@ -1,13 +1,14 @@
 # Reusable: classifies a commit on main with the Controller's release transaction and, when a release
 # is due, builds the APK, verifies it, tags it and publishes a GitHub Release.
-name: Release
+name: Build and publish
 
 on:
   workflow_call:
     secrets:
-      signing-keystore:
+      REPFLOW_DEBUG_KEYSTORE_B64:
         description: Base64 of the debug keystore the owner's phone has the app signed with
         required: true
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -23,6 +24,10 @@ jobs:
       version: ${{ steps.classify.outputs.version }}
       commit: ${{ steps.classify.outputs.commit }}
     steps:
+      - name: Check publication branch
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: test "$RELEASE_REF" = refs/heads/main
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
@@ -71,7 +76,7 @@ jobs:
           github-token: ${{ github.token }}
       - name: Restore the signing key
         env:
-          KEYSTORE_B64: ${{ secrets.signing-keystore }}
+          KEYSTORE_B64: ${{ secrets.REPFLOW_DEBUG_KEYSTORE_B64 }}
         run: |
           mkdir -p ~/.android
           printf '%s' "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore

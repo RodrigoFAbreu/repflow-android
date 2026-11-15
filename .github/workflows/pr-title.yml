@@ -9,8 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  title:
-    name: PR title
+  common-title:
+    uses: RodrigoFAbreu/action-workflows/.github/workflows/pr-title.yml@main
+  project-title:
+    name: Project release title
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -28,3 +30,16 @@ jobs:
           (cd "$RUNNER_TEMP/wc" && sha256sum -c SHA256SUMS)
           pip install "$RUNNER_TEMP"/wc/*.whl
           python3 tools/release.py check-title "$TITLE"
+
+  title:
+    name: PR title
+    needs: [common-title, project-title]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          COMMON_RESULT: ${{ needs.common-title.result }}
+          PROJECT_RESULT: ${{ needs.project-title.result }}
+        run: |
+          test "$COMMON_RESULT" = success
+          test "$PROJECT_RESULT" = success

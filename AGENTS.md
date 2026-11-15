@@ -81,7 +81,7 @@ Never push, merge, rebase, force-push, or create a pull request.
 ./gradlew assembleDebug                 # assemble debug APK
 ```
 
-CI (`.github/workflows/pipeline.yml`, the orchestrator, calling `android-checks.yml` and on `main` `release.yml`) runs, in order: `spotlessCheck`, `detekt`,
+CI (`.github/workflows/ci.yml`, the orchestrator, calling `test.yml` and on `main` `build-and-publish.yml`) runs, in order: `spotlessCheck`, `detekt`,
 `lintDebug`, `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`
 (instrumented tests compile but don't run in CI — no device available). Run
 the narrowest relevant check per checkpoint; run the full suite before

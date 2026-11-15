@@ -1,8 +1,9 @@
 # Reusable: formatting, static analysis, lint, unit tests, and both APK builds.
-name: Android checks
+name: Test
 
 on:
   workflow_call:
+  workflow_dispatch:
 
 permissions:
   contents: read
